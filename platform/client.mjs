@@ -23,33 +23,37 @@ export class Message {
 export class Client extends EventEmitter {
   constructor(url,options={}){
     super();this.endpoint=new URL(url);this.options={timeout:2000,maxReconnects:10,maxPendingBytes:2097152,...options};
+    const allowed=new Set(['timeout','maxReconnects','maxPendingBytes','token','user','password','allowPlainAuth','serverName','ca','apiPrefix']);for(const key of Object.keys(options))if(!allowed.has(key))throw new Error('Unsupported connection option '+key);
+    for(const key of ['token','user','password'])if(options[key]!==undefined&&(typeof options[key]!=='string'||Buffer.byteLength(options[key])>2048))throw new Error('Invalid credential field');
+    if(options.allowPlainAuth!==undefined&&typeof options.allowPlainAuth!=='boolean')throw new Error('allowPlainAuth must be boolean');
+    if(options.token&&(options.user||options.password))throw new Error('Choose token or user/password authentication');
     if(!['nats:','tls:'].includes(this.endpoint.protocol)||this.endpoint.username||this.endpoint.password||this.endpoint.search||this.endpoint.hash||!['','/'].includes(this.endpoint.pathname))throw new Error('Use nats:// or tls:// without URL credentials');
     if(this.endpoint.protocol==='nats:'&&(options.token||options.password)&&!['localhost','127.0.0.1','[::1]'].includes(this.endpoint.hostname)&&!options.allowPlainAuth)throw new Error('Remote plaintext credentials require explicit allowPlainAuth; prefer TLS');
     bound(this.options.timeout,50,30000,'timeout');bound(this.options.maxReconnects,0,20,'reconnect');bound(this.options.maxPendingBytes,1024,16777216,'pending bytes');
-    this.id=randomUUID();this.next=0;this.pending=new Map();this.pongs=[];this.status='disconnected';this.closed=false;this.attempts=0;this.timer=null;this.maxPayload=1048576;this.maxReceive=8388608;
+    this.id=randomUUID();this.next=0;this.pending=new Map();this.pongs=[];this.status='disconnected';this.closed=false;this.attempts=0;this.timer=null;this.maxPayload=1048576;this.maxReceive=8388608;this.generation=0;
   }
   static async connect(url='nats://127.0.0.1:4222',options={}){await loadCore();const client=new Client(url,options);try{await client.open();return client;}catch(error){client.close();throw error;}}
   write(bytes){if(!this.socket||this.socket.destroyed)throw new Error('Disconnected; no unbounded outbound queue');if(this.socket.writableLength+bytes.length>this.options.maxPendingBytes)throw new Error('Socket backpressure byte budget exceeded');this.socket.write(bytes);}
-  raw(args,payload){this.write(encode(args,payload));}
+  raw(args,payload){this.write(encode({...args,max_payload:this.maxPayload},payload));}
   async open(){
-    if(this.closed)throw new Error('Client closed');this.status='connecting';command({action:'close',session:this.id});
+    if(this.closed)throw new Error('Client closed');if(['connecting','connected'].includes(this.status))throw new Error('Connection already active');this.status='connecting';const generation=++this.generation;command({action:'close',session:this.id});
     return new Promise((resolve,reject)=>{
       const deadline=setTimeout(()=>{reject(new Error('Connection handshake timeout'));this.socket?.destroy();},this.options.timeout);
       let ready=false,authenticated=false,tlsActive=false;
-      const fail=error=>{if(!ready){clearTimeout(deadline);reject(error);}this.socket?.destroy();};
+      const fail=error=>{if(generation!==this.generation)return;if(!ready){clearTimeout(deadline);reject(error);}this.socket?.destroy();};
       const connected=()=>{if(authenticated)return;authenticated=true;
         const settings={verbose:false,pedantic:true,lang:'moonbit',version:'0.1.0',protocol:1,headers:true,no_responders:true};
         if(this.options.token)settings.auth_token=this.options.token;if(this.options.user)settings.user=this.options.user;if(this.options.password)settings.pass=this.options.password;
         this.raw({action:'connect',options:settings});this.pongs.push({resolve:()=>{ready=true;clearTimeout(deadline);this.status='connected';this.attempts=0;this.emit('connected');resolve();},reject:fail});this.raw({action:'ping'});
       };
       const data=bytes=>{
-        try{const parsed=JSON.parse(core.decode(JSON.stringify({session:this.id}),bytes));if(!parsed.ok)throw new Error(parsed.error);
+        if(this.closed||generation!==this.generation)return;try{const parsed=JSON.parse(core.decode(JSON.stringify({session:this.id}),bytes));if(!parsed.ok)throw new Error(parsed.error);
           for(const frame of parsed.value){
             if(frame.kind==='INFO'){
               const info=command({action:'response',source:Buffer.from(frame.data,'hex').toString('utf8')});
-              if(!Number.isSafeInteger(info.max_payload)||info.max_payload<=0)throw new Error('Invalid server max_payload');this.maxPayload=Math.min(info.max_payload,8388608);
+              if(!Number.isSafeInteger(info.max_payload)||info.max_payload<=0)throw new Error('Invalid server max_payload');this.maxPayload=Math.min(info.max_payload,1048576);
               if(!authenticated){if(info.nonce&&!this.options.token&&!this.options.user)throw new Error('NKey/JWT authentication not supported');
-                if(this.endpoint.protocol==='tls:'&&!tlsActive){const old=this.socket;old.removeListener('data',data);const secure=tls.connect({socket:old,servername:this.options.serverName||this.endpoint.hostname,ca:this.options.ca,rejectUnauthorized:true,minVersion:'TLSv1.2'});this.socket=secure;secure.on('data',data);secure.once('secureConnect',()=>{tlsActive=true;connected();});secure.on('error',fail);secure.once('close',()=>this.lost());}
+                if(this.endpoint.protocol==='tls:'&&!tlsActive){const old=this.socket;old.removeListener('data',data);const secure=tls.connect({socket:old,servername:this.options.serverName||this.endpoint.hostname,ca:this.options.ca,rejectUnauthorized:true,minVersion:'TLSv1.2'});this.socket=secure;secure.on('data',data);secure.once('secureConnect',()=>{tlsActive=true;connected();});secure.on('error',fail);secure.once('close',()=>{if(generation===this.generation)this.lost();});}
                 else{if(info.tls_required&&!tlsActive)throw new Error('Server requires TLS; use tls:// with trusted CA');connected();}}
             }else if(frame.kind==='PING')this.raw({action:'pong'});
             else if(frame.kind==='PONG'){const pong=this.pongs.shift();if(pong)pong.resolve();}
@@ -58,22 +62,22 @@ export class Client extends EventEmitter {
           }
         }catch(error){fail(error);}
       };
-      const socket=net.createConnection({host:this.endpoint.hostname.replace(/^\[|\]$/g,''),port:Number(this.endpoint.port||4222)});this.socket=socket;socket.on('data',data);socket.on('error',()=>fail(new Error('NATS transport error')));socket.once('close',()=>{if(!ready){clearTimeout(deadline);reject(new Error('Connection closed before handshake'));}this.lost();});
+      const socket=net.createConnection({host:this.endpoint.hostname.replace(/^\[|\]$/g,''),port:Number(this.endpoint.port||4222)});this.socket=socket;socket.on('data',data);socket.on('error',()=>fail(new Error('NATS transport error')));socket.once('close',()=>{if(!ready){clearTimeout(deadline);reject(new Error('Connection closed before handshake'));}if(generation===this.generation)this.lost();});
     });
   }
   failPending(){const error=new Error('Connection lost; publish outcome may be unknown. Retry only with the same messageId.');for(const p of [...this.pending.values()])p.fail(error);for(const p of this.pongs.splice(0))p.reject(error);}
   lost(){if(this.closed||this.status==='disconnected')return;this.status='disconnected';this.failPending();this.emit('disconnected');this.schedule();}
   schedule(){if(this.closed||this.timer)return;if(this.attempts>=this.options.maxReconnects){this.emit('reconnectExhausted');return;}const delay=command({action:'retry',attempt:this.attempts++});this.timer=setTimeout(async()=>{this.timer=null;try{await this.open();}catch{this.status='disconnected';this.schedule();}},delay);}
-  async waitConnected(timeout=10000){bound(timeout,50,60000,'wait');if(this.status==='connected')return;await new Promise((resolve,reject)=>{const finish=()=>{clearTimeout(timer);this.removeListener('connected',finish);resolve();};const timer=setTimeout(()=>{this.removeListener('connected',finish);reject(new Error('Reconnect wait expired'));},timeout);this.on('connected',finish);});}
-  flush(timeout=this.options.timeout){if(this.status!=='connected')return Promise.reject(new Error('Disconnected'));return new Promise((resolve,reject)=>{const entry={resolve:()=>{clearTimeout(timer);resolve();},reject:error=>{clearTimeout(timer);reject(error);}};const timer=setTimeout(()=>{const index=this.pongs.indexOf(entry);if(index>=0)this.pongs.splice(index,1);reject(new Error('Flush timeout'));},timeout);this.pongs.push(entry);try{this.raw({action:'ping'});}catch(error){entry.reject(error);}});}
-  async send(subject,payload=Buffer.alloc(0),headers=[]){if(this.status!=='connected')throw new Error('Disconnected');const data=Buffer.from(payload);if(data.length>this.maxPayload)throw new Error('Server payload budget exceeded');this.raw({action:'pub',subject,headers},data);await this.flush();}
+  async waitConnected(timeout=10000){bound(timeout,50,60000,'wait');if(this.closed)throw new Error('Client closed');if(this.status==='connected')return;if(this.status==='disconnected'&&this.attempts>=this.options.maxReconnects)throw new Error('Reconnect exhausted');await new Promise((resolve,reject)=>{const cleanup=()=>{clearTimeout(timer);this.removeListener('connected',success);this.removeListener('closed',failure);this.removeListener('reconnectExhausted',failure);};const success=()=>{cleanup();resolve();},failure=()=>{cleanup();reject(new Error('Client closed or reconnect exhausted'));};const timer=setTimeout(()=>{cleanup();reject(new Error('Reconnect wait expired'));},timeout);this.on('connected',success);this.on('closed',failure);this.on('reconnectExhausted',failure);});}
+  flush(timeout=this.options.timeout){if(this.status!=='connected')return Promise.reject(new Error('Disconnected'));bound(timeout,50,30000,'flush timeout');if(this.pongs.length>=32)return Promise.reject(new Error('Flush window full'));return new Promise((resolve,reject)=>{const entry={resolve:()=>{clearTimeout(timer);resolve();},reject:error=>{clearTimeout(timer);reject(error);}};const timer=setTimeout(()=>{reject(new Error('Flush timeout; disconnecting to avoid stale PONG correlation'));this.socket?.destroy();},timeout);this.pongs.push(entry);try{this.raw({action:'ping'});}catch(error){entry.reject(error);this.socket?.destroy();}});}
+  async send(subject,payload=Buffer.alloc(0),headers=[]){if(this.status!=='connected')throw new Error('Disconnected');if(this.pongs.length>=32)throw new Error('Flush window full');const data=Buffer.from(payload);if(data.length>this.maxPayload)throw new Error('Server payload budget exceeded');this.raw({action:'pub',subject,headers},data);await this.flush();}
   exchange(subject,payload,{headers=[],batch=1,timeout=this.options.timeout,pull=false}={}){
     if(this.status!=='connected')return Promise.reject(new Error('Disconnected'));bound(timeout,50,35000,'request timeout');bound(batch,1,256,'batch');const data=Buffer.from(payload);if(data.length>this.maxPayload)return Promise.reject(new Error('Server payload budget exceeded'));
     const sid='r'+(++this.next),reply='_INBOX.MOONJET.'+this.id.replaceAll('-','')+'.'+sid;
     try{command({action:'reserve',session:this.id,key:sid});}catch(error){return Promise.reject(error);}
     return new Promise((resolve,reject)=>{
       const messages=[];let bytes=0,done=false;
-      const finish=(error)=>{if(done)return;done=true;clearTimeout(timer);this.pending.delete(sid);command({action:'release',session:this.id,key:sid});if(this.status==='connected'){try{this.raw({action:'unsub',sid});}catch{}}if(error)reject(error);else resolve(pull?messages:messages[0]);};
+      const finish=(error)=>{if(done)return;done=true;clearTimeout(timer);this.pending.delete(sid);command({action:'release',session:this.id,key:sid});if(this.status==='connected'){try{this.raw({action:'unsub',sid});}catch{this.socket?.destroy();}}if(error)reject(error);else resolve(pull?messages:messages[0]);};
       const timer=setTimeout(()=>finish(new Error('Request timeout; delivery outcome may be unknown')),timeout);
       this.pending.set(sid,{fail:finish,receive:frame=>{
         if(frame.status===100){if(frame.reply){try{this.raw({action:'pub',subject:frame.reply},Buffer.alloc(0));}catch(error){finish(error);}}return;}
@@ -92,6 +96,6 @@ export class Client extends EventEmitter {
   consumerInfo(stream,name){return this.manage('consumer.info',stream,name);}
   async publish(subject,payload,{messageId}={}){if(typeof messageId!=='string'||!messageId.length||Buffer.byteLength(messageId)>128)throw new Error('Provide stable messageId (1..128 bytes) for safe retry');const data=await this.request(subject,Buffer.from(payload),{headers:[{name:'Nats-Msg-Id',value:messageId}]});return {...command({action:'publish_ack',source:data.toString('utf8')}),messageId};}
   async fetch(stream,consumer,{batch=1,expiresMs=1000,maxBytes=1048576}={}){const req=this.api('consumer.next',stream,consumer,'events.>',{batch,expires_ms:expiresMs,max_bytes:maxBytes});return this.exchange(req.subject,Buffer.from(req.body),{batch,timeout:expiresMs+500,pull:true});}
-  async getMessage(stream,sequence){const data=await this.manage('message.get',stream,'','events.>',{sequence:String(sequence)});return {subject:data.message.subject,sequence:String(data.message.seq),data:Buffer.from(data.message.data||'','base64')};}
-  close(){if(this.closed)return;this.closed=true;if(this.timer)clearTimeout(this.timer);this.failPending();this.status='closed';this.socket?.destroy();command({action:'close',session:this.id});}
+  async getMessage(stream,sequence){if(typeof sequence!=='string'&&!(typeof sequence==='number'&&Number.isSafeInteger(sequence)&&sequence>0))throw new Error('Use decimal string for 64-bit sequence');const data=await this.manage('message.get',stream,'','events.>',{sequence:String(sequence)});return {subject:data.message.subject,sequence:String(data.message.seq),data:Buffer.from(data.message.data||'','base64')};}
+  close(){if(this.closed)return;this.closed=true;if(this.timer)clearTimeout(this.timer);this.failPending();this.status='closed';this.socket?.destroy();command({action:'close',session:this.id});this.emit('closed');}
 }

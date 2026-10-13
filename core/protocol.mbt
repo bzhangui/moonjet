@@ -68,21 +68,27 @@ fn token(text : String) -> Unit raise ProtocolError {
 }
 
 ///|
-pub fn publish(subject : String, payload : Bytes, reply? : String = "", headers? : Array[Header] = []) -> Bytes raise ProtocolError {
+fn header_name(name : String) -> Unit raise ProtocolError {
+  guard name.length()>0 && name.length()<=64 else {raise Invalid("invalid header name size")}
+  for c in name { guard (c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||"!#$%&'*+-.^_`|~".contains_char(c) else {raise Invalid("invalid header name token")} }
+}
+
+///|
+pub fn publish(subject : String, payload : Bytes, reply? : String = "", headers? : Array[Header] = [], max_payload? : Int = 8388608) -> Bytes raise ProtocolError {
   validate_subject(subject)
   if reply != "" { validate_subject(reply) }
-  guard payload.length() <= 8388608 && headers.length() <= 64 else { raise Invalid("publish budget exceeded") }
+  guard max_payload>=0 && max_payload<=8388608 && payload.length() <= max_payload && headers.length() <= 64 else { raise Invalid("publish budget exceeded") }
   let reply_text = if reply == "" { "" } else { " "+reply }
   if headers.is_empty() { return @utf8.encode("PUB \{subject}\{reply_text} \{payload.length()}\r\n") + payload + b"\r\n" }
   let mut header_text = "NATS/1.0\r\n"
   for header in headers {
-    token(header.name)
+    header_name(header.name)
     for c in header.value { guard c >= ' ' && c != '\u007f' else { raise Invalid("unsafe header value") } }
     header_text += header.name+": "+header.value+"\r\n"
   }
   header_text += "\r\n"
   let header_bytes = @utf8.encode(header_text)
-  guard header_bytes.length() <= 8192 else { raise Invalid("header byte budget exceeded") }
+  guard header_bytes.length() <= 8192 && header_bytes.length()+payload.length()<=max_payload else { raise Invalid("header/peer byte budget exceeded") }
   @utf8.encode("HPUB \{subject}\{reply_text} \{header_bytes.length()} \{header_bytes.length()+payload.length()}\r\n") + header_bytes + payload + b"\r\n"
 }
 
@@ -114,7 +120,7 @@ fn parse_headers(data : Bytes) -> (Array[Header],Int) raise {
     if line == "" { continue }
     let pair = line.split_once(":").unwrap_or_else(() => raise Invalid("header delimiter missing"))
     let name = pair.0.to_owned()
-    token(name)
+    header_name(name)
     let value = pair.1.trim().to_owned()
     headers.push({name,value})
     guard headers.length() <= 64 else { raise Invalid("header count exceeded") }
@@ -132,7 +138,7 @@ fn Decoder::parse(self : Decoder, data : Bytes) -> Array[Frame] raise {
     let mut line_end = cursor
     while line_end+1 < self.buffer.length() && !(self.buffer[line_end] == b'\r' && self.buffer[line_end+1] == b'\n') { line_end += 1 }
     guard line_end-cursor <= 4096 else { raise Invalid("control line budget exceeded") }
-    if line_end+1 >= self.buffer.length() { break }
+    if line_end+1 >= self.buffer.length() { guard self.buffer.length()-cursor<=4096 else {raise Invalid("incomplete control line budget exceeded")}; break }
     let line = @utf8.decode(Bytes::from_array(self.buffer[cursor:line_end]))
     let parts = line.replace_all(old="\t",new=" ").split(" ").filter(v=>!v.is_empty()).map(v=>v.to_owned()).to_array()
     guard parts.length() > 0 else { raise Invalid("empty protocol operation") }

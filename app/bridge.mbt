@@ -21,6 +21,17 @@ fn hex(bytes : Bytes) -> String {
   for byte in bytes { builder.write_string(byte.to_hex()) }
   builder.to_string()
 }
+
+///|
+fn normalized_response(value : Json, key? : String = "", depth? : Int = 0) -> Json raise {
+  guard depth<=24 else { raise @protocol.Invalid("response nesting budget") }
+  if ["seq","first_seq","last_seq","stream_seq","consumer_seq","opt_start_seq"].contains(key) && value is Number(_,..) { return Json(@protocol.sequence_value(value)) }
+  match value {
+    Object(map)=>{let output:Map[String,Json]=Map([]);for(name,item)in map{output[name]=normalized_response(item,key=name,depth=depth+1)};Json(output)}
+    Array(items)=>Json(items.map(item=>normalized_response(item,depth=depth+1)))
+    _=>value
+  }
+}
 ///|
 pub fn decode(arguments : String, bytes : Bytes) -> String {
   try {
@@ -43,7 +54,8 @@ pub fn encode(arguments : String, payload : Bytes) -> Bytes raise {
   match value_text(@protocol.json_field(args,"action")) {
     "pub" => {
       let headers : Array[@protocol.Header]=if @protocol.json_field(args,"headers")==null { [] } else { @json.from_json(@protocol.json_field(args,"headers")) }
-      @protocol.publish(subject,payload,reply=value_text(@protocol.json_field(args,"reply")),headers~)
+      let maximum=match @protocol.json_field(args,"max_payload") {Number(n,..)=>{guard n>=0.0 && n<=8388608.0 && n==n.to_int().to_double() else {raise @protocol.Invalid("invalid peer budget")};n.to_int()};_=>8388608}
+      @protocol.publish(subject,payload,reply=value_text(@protocol.json_field(args,"reply")),headers~,max_payload=maximum)
     }
     "sub" => @protocol.subscribe(subject,id)
     "unsub" => @protocol.unsubscribe(id)
@@ -52,7 +64,9 @@ pub fn encode(arguments : String, payload : Bytes) -> Bytes raise {
     "connect" => {
       let options=@protocol.json_field(args,"options")
       guard options is Object(_) else { raise @protocol.Invalid("CONNECT options must be object") }
-      @utf8.encode("CONNECT "+options.stringify()+"\r\n")
+      let bytes=@utf8.encode("CONNECT "+options.stringify()+"\r\n")
+      guard bytes.length()<=4096 else {raise @protocol.Invalid("CONNECT control line budget exceeded")}
+      bytes
     }
     _ => raise @protocol.Invalid("unsupported encoder operation")
   }
@@ -63,7 +77,7 @@ fn command_impl(arguments : String) -> Json raise {
   let current_action=value_text(@protocol.json_field(args,"action"))
   match current_action {
     "api" => Json(@protocol.api_request(value_text(@protocol.json_field(args,"operation")),value_text(@protocol.json_field(args,"stream")),consumer=value_text(@protocol.json_field(args,"consumer")),filter=value_text(@protocol.json_field(args,"filter"),fallback="events.>"),options=@protocol.json_field(args,"options"),prefix=value_text(@protocol.json_field(args,"prefix"),fallback="$JS.API")))
-    "response" => @protocol.api_response(value_text(@protocol.json_field(args,"source")))
+    "response" => normalized_response(@protocol.api_response(value_text(@protocol.json_field(args,"source"))))
     "publish_ack" => Json(@protocol.publish_ack(value_text(@protocol.json_field(args,"source"))))
     "metadata" => Json(@protocol.ack_metadata(value_text(@protocol.json_field(args,"subject"))))
     "ack" => {
