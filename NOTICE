@@ -1,0 +1,8 @@
+MoonJet
+Copyright 2026 MoonJet contributors
+Licensed under Apache-2.0.
+Uses MoonBit core (moonc 0.10.15), Copyright 2026 International Digital Economy Academy,
+licensed under Apache-2.0; license retained in licenses/MoonBit-Apache-2.0.txt.
+Node.js is an external runtime, not bundled. NATS protocol documentation is a reference.
+No nats.js/nats.go implementation was copied. Apache-2.0 nats-server is an external
+checksum-verified test service, not bundled.
