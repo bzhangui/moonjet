@@ -6,7 +6,7 @@
 4. README有目标/安装/使用/样例/交付语义。
 5. Windows/macOS/Linux远端检查/构建/核心/真实服务/TLS/运行包通过，见PUBLICATION。
 6. 核心样例和三个真实本地服务场景。
-7. 13核心/24Node通过，范围见QUALITY_REPORT。
+7. 0.1.1本机15核心/32Node通过；新版本远端与发布证据需分别核验，范围见QUALITY_REPORT。
 8. bzhangui/moonjet@0.1.0 已正式发布；匿名清单、注册表构建与独立四目标消费者通过，见PUBLICATION。
 9. Apache-2.0/NOTICE/标准库归属完整，不移植nats.js/nats.go，测试服务外部。
 

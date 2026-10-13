@@ -6,6 +6,8 @@
 
 ## 实现范围
 
+当前修复源码版本为 **0.1.1**。本轮协议、重投参数与大消息历史回读修复见 [更新记录](CHANGELOG.md) 与 [复测报告](docs/QUALITY_REPORT.md)，实际注册表状态见 [发布记录](docs/PUBLICATION.md)。
+
 MoonBit 实现协议、JetStream 请求/ACK/PubAck/元数据、精确 uint64、在途窗口与退避；Node 适配 TCP、证书 TLS、计时器和异步调度。核心四目标可复用；**当前联网为 Node/JS 参考适配**，不冒称 Native/Wasm 已联网。支持 durable pull，不是完整官方客户端。
 
 ## 安装和独立演示
