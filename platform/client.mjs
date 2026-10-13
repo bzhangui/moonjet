@@ -6,16 +6,19 @@ import {EventEmitter} from 'node:events';
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
+const VERSION=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version;
 let core;
 export async function loadCore(){if(!core){const artifact=path.join(root,'_build/js/release/build/cmd/bridge/bridge.js');if(!fs.existsSync(artifact))throw new Error('Build first: npm run build');await import(pathToFileURL(artifact));core=globalThis.__moonjet_core;}return core;}
 function command(args){const result=JSON.parse(core.command(JSON.stringify(args)));if(!result.ok)throw new Error(result.error);return result.value;}
 const encode=(args,payload=Buffer.alloc(0))=>{const bytes=Buffer.from(core.encode(JSON.stringify(args),payload));if(!bytes.length)throw new Error('Protocol encoder rejected unsafe or over-budget request');return bytes;};
 const bound=(value,min,max,label)=>{if(!Number.isInteger(value)||value<min||value>max)throw new Error('Invalid '+label+' budget');return value;};
+function checkedOptions(value,allowed){if(!value||typeof value!=='object'||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw new Error('Invalid options object');for(const key of Reflect.ownKeys(value))if(!allowed.includes(key))throw new Error('Unsupported request option');return value;}
+const jsonText=bytes=>new TextDecoder('utf-8',{fatal:true}).decode(bytes);
 
 export class Message {
   constructor(client,frame){this.client=client;this.subject=frame.subject;this.reply=frame.reply;this.headers=frame.headers;this.data=Buffer.from(frame.data,'hex');this.metadata=command({action:'metadata',subject:this.reply});this.confirmed=false;}
   async ack(){if(this.confirmed)return;await this.client.request(this.reply,Buffer.from(command({action:'ack',kind:'ack'}),'hex'));this.confirmed=true;}
-  async nak(delayMs=0){await this.client.send(this.reply,Buffer.from(command({action:'ack',kind:'nak',delay_ms:delayMs}),'hex'));}
+  async nak(delayMs=0){bound(delayMs,0,3600000,'NAK delay');await this.client.send(this.reply,Buffer.from(command({action:'ack',kind:'nak',delay_ms:delayMs}),'hex'));}
   async working(){await this.client.send(this.reply,Buffer.from(command({action:'ack',kind:'working'}),'hex'));}
   async term(){await this.client.send(this.reply,Buffer.from(command({action:'ack',kind:'term'}),'hex'));}
 }
@@ -28,7 +31,7 @@ export class Client extends EventEmitter {
     if(options.allowPlainAuth!==undefined&&typeof options.allowPlainAuth!=='boolean')throw new Error('allowPlainAuth must be boolean');
     if(options.token&&(options.user||options.password))throw new Error('Choose token or user/password authentication');
     if(!['nats:','tls:'].includes(this.endpoint.protocol)||this.endpoint.username||this.endpoint.password||this.endpoint.search||this.endpoint.hash||!['','/'].includes(this.endpoint.pathname))throw new Error('Use nats:// or tls:// without URL credentials');
-    if(this.endpoint.protocol==='nats:'&&(options.token||options.password)&&!['localhost','127.0.0.1','[::1]'].includes(this.endpoint.hostname)&&!options.allowPlainAuth)throw new Error('Remote plaintext credentials require explicit allowPlainAuth; prefer TLS');
+    if(this.endpoint.protocol==='nats:'&&(options.token||options.user||options.password)&&!['localhost','127.0.0.1','[::1]'].includes(this.endpoint.hostname)&&!options.allowPlainAuth)throw new Error('Remote plaintext credentials require explicit allowPlainAuth; prefer TLS');
     bound(this.options.timeout,50,30000,'timeout');bound(this.options.maxReconnects,0,20,'reconnect');bound(this.options.maxPendingBytes,1024,16777216,'pending bytes');
     this.id=randomUUID();this.next=0;this.pending=new Map();this.pongs=[];this.status='disconnected';this.closed=false;this.attempts=0;this.timer=null;this.maxPayload=1048576;this.maxReceive=8388608;this.generation=0;
   }
@@ -42,7 +45,7 @@ export class Client extends EventEmitter {
       let ready=false,authenticated=false,tlsActive=false;
       const fail=error=>{if(generation!==this.generation)return;if(!ready){clearTimeout(deadline);reject(error);}this.socket?.destroy();};
       const connected=()=>{if(authenticated)return;authenticated=true;
-        const settings={verbose:false,pedantic:true,lang:'moonbit',version:'0.1.0',protocol:1,headers:true,no_responders:true};
+        const settings={verbose:false,pedantic:true,lang:'moonbit',version:VERSION,protocol:1,headers:true,no_responders:true};
         if(this.options.token)settings.auth_token=this.options.token;if(this.options.user)settings.user=this.options.user;if(this.options.password)settings.pass=this.options.password;
         this.raw({action:'connect',options:settings});this.pongs.push({resolve:()=>{ready=true;clearTimeout(deadline);this.status='connected';this.attempts=0;this.emit('connected');resolve();},reject:fail});this.raw({action:'ping'});
       };
@@ -50,8 +53,9 @@ export class Client extends EventEmitter {
         if(this.closed||generation!==this.generation)return;try{const parsed=JSON.parse(core.decode(JSON.stringify({session:this.id}),bytes));if(!parsed.ok)throw new Error(parsed.error);
           for(const frame of parsed.value){
             if(frame.kind==='INFO'){
-              const info=command({action:'response',source:Buffer.from(frame.data,'hex').toString('utf8')});
+              const info=command({action:'response',source:jsonText(Buffer.from(frame.data,'hex'))});
               if(!Number.isSafeInteger(info.max_payload)||info.max_payload<=0)throw new Error('Invalid server max_payload');this.maxPayload=Math.min(info.max_payload,1048576);
+              if(!authenticated&&info.headers!==true)throw new Error('Server must support NATS headers for JetStream message IDs');
               if(!authenticated){if(info.nonce&&!this.options.token&&!this.options.user)throw new Error('NKey/JWT authentication not supported');
                 if(this.endpoint.protocol==='tls:'&&!tlsActive){const old=this.socket;old.removeListener('data',data);const secure=tls.connect({socket:old,servername:this.options.serverName||this.endpoint.hostname,ca:this.options.ca,rejectUnauthorized:true,minVersion:'TLSv1.2'});this.socket=secure;secure.on('data',data);secure.once('secureConnect',()=>{tlsActive=true;connected();});secure.on('error',fail);secure.once('close',()=>{if(generation===this.generation)this.lost();});}
                 else{if(info.tls_required&&!tlsActive)throw new Error('Server requires TLS; use tls:// with trusted CA');connected();}}
@@ -71,8 +75,9 @@ export class Client extends EventEmitter {
   async waitConnected(timeout=10000){bound(timeout,50,60000,'wait');if(this.closed)throw new Error('Client closed');if(this.status==='connected')return;if(this.status==='disconnected'&&this.attempts>=this.options.maxReconnects)throw new Error('Reconnect exhausted');await new Promise((resolve,reject)=>{const cleanup=()=>{clearTimeout(timer);this.removeListener('connected',success);this.removeListener('closed',failure);this.removeListener('reconnectExhausted',failure);};const success=()=>{cleanup();resolve();},failure=()=>{cleanup();reject(new Error('Client closed or reconnect exhausted'));};const timer=setTimeout(()=>{cleanup();reject(new Error('Reconnect wait expired'));},timeout);this.on('connected',success);this.on('closed',failure);this.on('reconnectExhausted',failure);});}
   flush(timeout=this.options.timeout){if(this.status!=='connected')return Promise.reject(new Error('Disconnected'));bound(timeout,50,30000,'flush timeout');if(this.pongs.length>=32)return Promise.reject(new Error('Flush window full'));return new Promise((resolve,reject)=>{const entry={resolve:()=>{clearTimeout(timer);resolve();},reject:error=>{clearTimeout(timer);reject(error);}};const timer=setTimeout(()=>{reject(new Error('Flush timeout; disconnecting to avoid stale PONG correlation'));this.socket?.destroy();},timeout);this.pongs.push(entry);try{this.raw({action:'ping'});}catch(error){entry.reject(error);this.socket?.destroy();}});}
   async send(subject,payload=Buffer.alloc(0),headers=[]){if(this.status!=='connected')throw new Error('Disconnected');if(this.pongs.length>=32)throw new Error('Flush window full');const data=Buffer.from(payload);if(data.length>this.maxPayload)throw new Error('Server payload budget exceeded');this.raw({action:'pub',subject,headers},data);await this.flush();}
-  exchange(subject,payload,{headers=[],batch=1,timeout=this.options.timeout,pull=false}={}){
-    if(this.status!=='connected')return Promise.reject(new Error('Disconnected'));bound(timeout,50,35000,'request timeout');bound(batch,1,256,'batch');const data=Buffer.from(payload);if(data.length>this.maxPayload)return Promise.reject(new Error('Server payload budget exceeded'));
+  async exchange(subject,payload,options={}){
+    checkedOptions(options,['headers','batch','timeout','pull']);const {headers=[],batch=1,timeout=this.options.timeout,pull=false}=options;if(typeof pull!=='boolean')throw new Error('pull must be boolean');if(!Array.isArray(headers))throw new Error('headers must be an array');
+    if(this.status!=='connected')return Promise.reject(new Error('Disconnected'));bound(timeout,50,35000,'request timeout');bound(batch,1,256,'batch');if(!pull&&batch!==1)throw new Error('Multiple replies require pull options');const data=Buffer.from(payload);if(data.length>this.maxPayload)return Promise.reject(new Error('Server payload budget exceeded'));
     const sid='r'+(++this.next),reply='_INBOX.MOONJET.'+this.id.replaceAll('-','')+'.'+sid;
     try{command({action:'reserve',session:this.id,key:sid});}catch(error){return Promise.reject(error);}
     return new Promise((resolve,reject)=>{
@@ -89,13 +94,13 @@ export class Client extends EventEmitter {
   }
   request(subject,payload=Buffer.alloc(0),options={}){return this.exchange(subject,payload,options);}
   api(operation,stream,consumer='',filter='events.>',options={}){return command({action:'api',operation,stream,consumer,filter,options,prefix:this.options.apiPrefix||'$JS.API'});}
-  async manage(operation,stream,consumer='',filter='events.>',options={}){const req=this.api(operation,stream,consumer,filter,options);const data=await this.request(req.subject,Buffer.from(req.body));return command({action:'response',source:data.toString('utf8')});}
+  async manage(operation,stream,consumer='',filter='events.>',options={}){const req=this.api(operation,stream,consumer,filter,options);const data=await this.request(req.subject,Buffer.from(req.body));return command({action:'response',source:jsonText(data)});}
   createStream(name,subject,options={}){return this.manage('stream.create',name,'',subject,options);}
   streamInfo(name){return this.manage('stream.info',name);}
   createConsumer(stream,name,subject,options={}){return this.manage('consumer.create',stream,name,subject,options);}
   consumerInfo(stream,name){return this.manage('consumer.info',stream,name);}
-  async publish(subject,payload,{messageId}={}){if(typeof messageId!=='string'||!messageId.length||Buffer.byteLength(messageId)>128)throw new Error('Provide stable messageId (1..128 bytes) for safe retry');const data=await this.request(subject,Buffer.from(payload),{headers:[{name:'Nats-Msg-Id',value:messageId}]});return {...command({action:'publish_ack',source:data.toString('utf8')}),messageId};}
-  async fetch(stream,consumer,{batch=1,expiresMs=1000,maxBytes=1048576}={}){const req=this.api('consumer.next',stream,consumer,'events.>',{batch,expires_ms:expiresMs,max_bytes:maxBytes});return this.exchange(req.subject,Buffer.from(req.body),{batch,timeout:expiresMs+500,pull:true});}
-  async getMessage(stream,sequence){if(typeof sequence!=='string'&&!(typeof sequence==='number'&&Number.isSafeInteger(sequence)&&sequence>0))throw new Error('Use decimal string for 64-bit sequence');const data=await this.manage('message.get',stream,'','events.>',{sequence:String(sequence)});return {subject:data.message.subject,sequence:String(data.message.seq),data:Buffer.from(data.message.data||'','base64')};}
+  async publish(subject,payload,options={}){checkedOptions(options,['messageId']);const {messageId}=options;if(typeof messageId!=='string'||!messageId.length||Buffer.byteLength(messageId)>128)throw new Error('Provide stable messageId (1..128 bytes) for safe retry');const data=await this.request(subject,Buffer.from(payload),{headers:[{name:'Nats-Msg-Id',value:messageId}]});return {...command({action:'publish_ack',source:jsonText(data)}),messageId};}
+  async fetch(stream,consumer,options={}){checkedOptions(options,['batch','expiresMs','maxBytes']);const {batch=1,expiresMs=1000,maxBytes=1048576}=options;const req=this.api('consumer.next',stream,consumer,'events.>',{batch,expires_ms:expiresMs,max_bytes:maxBytes});return this.exchange(req.subject,Buffer.from(req.body),{batch,timeout:expiresMs+500,pull:true});}
+  async getMessage(stream,sequence){if(typeof sequence!=='string'&&!(typeof sequence==='number'&&Number.isSafeInteger(sequence)&&sequence>0))throw new Error('Use decimal string for 64-bit sequence');const data=await this.manage('message.get',stream,'','events.>',{sequence:String(sequence)});const message=data?.message;if(!message||typeof message.subject!=='string'||String(message.seq)!==String(sequence))throw new Error('Historical response identity mismatch');const encoded=message.data===undefined?'':message.data;if(typeof encoded!=='string'||encoded.length>1398104||!(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)))throw new Error('Invalid historical base64 payload');const payload=Buffer.from(encoded,'base64');if(payload.length>1048576||payload.toString('base64')!==encoded)throw new Error('Invalid historical base64 payload');return {subject:message.subject,sequence:String(message.seq),data:payload};}
   close(){if(this.closed)return;this.closed=true;if(this.timer)clearTimeout(this.timer);this.failPending();this.status='closed';this.socket?.destroy();command({action:'close',session:this.id});this.emit('closed');}
 }

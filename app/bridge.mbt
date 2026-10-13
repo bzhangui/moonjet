@@ -27,7 +27,7 @@ fn session(id : String) -> Session raise {
     raise @protocol.Invalid("connection count budget exceeded")
   }
   let created = {
-    decoder: @protocol.Decoder::new(),
+    decoder: @protocol.Decoder::new(max_payload=2097152),
     window: @protocol.Window::new(),
   }
   sessions[id] = created
@@ -201,7 +201,12 @@ fn command_impl(arguments : String) -> Json raise {
           }
           n.to_int()
         }
-        _ => 0
+        _ => {
+          guard args is Object(map) && !map.contains("delay_ms") else {
+            raise @protocol.Invalid("delay must be a numeric integer")
+          }
+          0
+        }
       }
       Json(
         hex(

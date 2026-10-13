@@ -61,7 +61,7 @@ fn text(value : Json) -> String raise ProtocolError {
 
 ///|
 pub fn parse_json(source : String) -> Json raise {
-  guard source.length() <= 1048576 && @utf8.encode(source).length() <= 1048576 else {
+  guard source.length() <= 2097152 && @utf8.encode(source).length() <= 2097152 else {
     raise Invalid("API JSON budget exceeded")
   }
   let mut depth = 0

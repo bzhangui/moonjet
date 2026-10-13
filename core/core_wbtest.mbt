@@ -11,6 +11,43 @@ test "fragmented binary MSG and multiple controls" {
 }
 
 ///|
+test "malformed header blocks cannot smuggle controls or successful status zero" {
+  for
+    source in [
+      "NATS/1.0\r\nX: a\u0000b\r\n\r\n", "NATS/1.0\r\n\r\nX: later\r\n\r\n", "NATS/1.0 000 Invalid\r\n\r\n",
+      "NATS/1.0 600 Invalid\r\n\r\n",
+    ] {
+    let header = @utf8.encode(source)
+    let wire = @utf8.encode(
+        "HMSG inbox 1 \{header.length()} \{header.length()}\r\n",
+      ) +
+      header +
+      b"\r\n"
+    assert_true(
+      try {
+        ignore(Decoder::new().feed(wire))
+        false
+      } catch {
+        _ => true
+      },
+    )
+  }
+}
+
+///|
+test "management JSON accepts bounded base64 expansion but rejects excess bytes" {
+  ignore(parse_json("{\"data\":\"" + "a".repeat(1100000) + "\"}"))
+  assert_true(
+    try {
+      ignore(parse_json("x".repeat(2097153)))
+      false
+    } catch {
+      _ => true
+    },
+  )
+}
+
+///|
 test "HPUB uses UTF8 byte lengths and blocks injection" {
   let encoded = publish("events", b"body", reply="inbox", headers=[
     { name: "Nats-Msg-Id", value: "unique", },

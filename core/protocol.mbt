@@ -214,19 +214,29 @@ fn parse_headers(data : Bytes) -> (Array[Header], Int32) raise {
     guard items.length() >= 2 && items[1].length() == 3 else {
       raise Invalid("invalid header status")
     }
-    decimal(items[1], 999)
+    let code = decimal(items[1], 599)
+    guard code >= 100 else { raise Invalid("invalid header status") }
+    code
+  }
+  for c in lines[0] {
+    guard c >= ' ' && c != '\u007f' else {
+      raise Invalid("header status contains control")
+    }
   }
   let headers = []
-  for i = 1; i < lines.length(); i = i + 1 {
+  for i = 1; i < lines.length() - 2; i = i + 1 {
     let line = lines[i]
-    if line == "" {
-      continue
-    }
+    guard line != "" else { raise Invalid("early header terminator") }
     let pair = line
       .split_once(":")
       .unwrap_or_else(() => raise Invalid("header delimiter missing"))
     let name = pair.0.to_owned()
     header_name(name)
+    for c in pair.1 {
+      guard (c >= ' ' && c != '\u007f') || c == '\t' else {
+        raise Invalid("header value contains control")
+      }
+    }
     let value = pair.1.trim().to_owned()
     headers.push({ name, value, })
     guard headers.length() <= 64 else { raise Invalid("header count exceeded") }
