@@ -1,4 +1,19 @@
-# 0.1.0 发布与复现记录
+# 发布与复现记录
+
+## 0.1.1 修复版 — 2026-10-13
+
+- 已实际发布 bzhangui/moonjet@0.1.1，匿名清单与 build_status=success 已确认，0.1.0未覆盖/撤回。
+- 清单：https://mooncakes.io/api/v0/manifest/bzhangui/moonjet@0.1.1
+- 上传源码提交：8cb350df538d7f2776ae94b7c83350acebead070。
+- 上传ZIP SHA-256：41ba35f2d761cf7edf62688d5d625b934c4317a89dd98932b296541faec25af1，与注册表一致。
+- [本轮三平台CI](https://github.com/bzhangui/moonjet/actions/runs/38407031655) 的检查、构建、完整测试、演示、覆盖与运行包均通过；本机15核心/32Node，详见QUALITY_REPORT。
+- 独立项目通过moon add下载安装并运行四目标样例；另用独立非主入口测试包在四目标验证关键修复行为，无主入口测试弃用警告。
+- node scripts/verify-registry.mjs 按当前版本生成独立消费者，包括修复回归；不使用本仓库的核心源码作为依赖。
+- 两个发布包经文件条目检查，不含申报书、登录凭据、运行数据/报告、私钥或编译器。本轮临时登录副本已移除。
+
+修复前问题与升级兼容变化见CHANGELOG、SECURITY；推荐0.1.1，不声称所有漏洞已穷尽。下面保留0.1.0历史证据。
+
+## 0.1.0 历史发布
 
 2026-10-13 已实际发布，不以 dry-run 或 CI 配置代替发布完成。
 
