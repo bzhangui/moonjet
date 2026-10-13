@@ -63,7 +63,7 @@ const client = await Client.connect('tls://nats.example.com:4222', {
 
 ## 交付语义与维护
 
-核心已发布至 [Mooncakes 0.1.0](https://mooncakes.io/docs/bzhangui/moonjet)，已有 MoonBit 项目可运行 `moon add bzhangui/moonjet@0.1.0`。安装与独立四目标验证见 [发布记录](docs/PUBLICATION.md)；完整执行仍需下面说明的 Node 适配环境。
+核心安装入口：[Mooncakes](https://mooncakes.io/docs/bzhangui/moonjet)，当前修复版命令为 `moon add bzhangui/moonjet@0.1.1`。实际发布状态、安装与独立四目标验证见 [发布记录](docs/PUBLICATION.md)；完整执行仍需下面说明的 Node 适配环境。
 
 按至少一次处理。PubAck 表示接受发布，去重有窗口；双重 ACK 表示收到消费 ACK，不保证业务事务或独立磁盘 fsync。实际单节点突停出现已确认消息重投，示例以业务键去重处理。
 
