@@ -1,3 +1,7 @@
-import { "bzhangui/moonjet/app" }
+import {
+  "bzhangui/moonjet/app",
+}
+
 pkgtype(kind: "executable")
+
 supported_targets = "+js"
