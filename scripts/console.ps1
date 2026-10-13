@@ -1,7 +1,7 @@
 ﻿$ErrorActionPreference = 'Stop'
 $projectPath = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $projectPath
-Write-Host 'MoonJet 0.1.0'
+Write-Host ('MoonJet ' + (Get-Content -LiteralPath (Join-Path $projectPath 'package.json') -Encoding UTF8 | ConvertFrom-Json).version)
 while ($true) {
     Write-Host '1 运行隔离演示   2 维护测试   3 使用说明   0 退出'
     $choice = Read-Host '请选择'

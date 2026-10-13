@@ -7,12 +7,13 @@ import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
+const version=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version;
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 function fixture(change){
   const dir=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'moonjet-bundle-test-'));
   try{
     fs.writeFileSync(path.join(dir,'payload.txt'),'safe fixture');
-    const manifest={format:1,name:'MoonJet',version:'0.1.0',files:{'payload.txt':hash('safe fixture')}};
+    const manifest={format:1,name:'MoonJet',version,files:{'payload.txt':hash('safe fixture')}};
     change?.(dir,manifest);
     fs.writeFileSync(path.join(dir,'manifest.json'),JSON.stringify(manifest));
     return spawnSync(process.execPath,[path.join(root,'scripts/verify-package.mjs'),dir],{encoding:'utf8',timeout:10000});
