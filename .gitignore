@@ -1,0 +1,8 @@
+_build/
+.mooncakes/
+.local/
+node_modules/
+.env*
+coverage/
+*.log
+*申报书*.md
