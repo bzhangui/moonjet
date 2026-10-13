@@ -1,0 +1,110 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bzhangui/moonjet/core"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn ack_metadata(String) -> AckMetadata raise ProtocolError
+
+pub fn acknowledgement(String, delay_ms? : Int) -> Bytes raise ProtocolError
+
+pub fn api_request(String, String, consumer? : String, filter? : String, options? : Json, prefix? : String) -> ApiRequest raise ProtocolError
+
+pub fn api_response(String) -> Json raise
+
+pub fn json_field(Json, String) -> Json
+
+pub fn parse_json(String) -> Json raise
+
+pub fn publish(String, Bytes, reply? : String, headers? : Array[Header], max_payload? : Int) -> Bytes raise ProtocolError
+
+pub fn publish_ack(String) -> PublishAck raise
+
+pub fn reconnect_delay(Int) -> Int raise ProtocolError
+
+pub fn sequence_value(Json) -> String raise ProtocolError
+
+pub fn subscribe(String, String, queue? : String) -> Bytes raise ProtocolError
+
+pub fn unsubscribe(String) -> Bytes raise ProtocolError
+
+pub fn validate_subject(String, wildcards? : Bool) -> Unit raise ProtocolError
+
+// Errors
+pub(all) suberror ProtocolError {
+  Invalid(String)
+} derive(@debug.Debug)
+pub fn ProtocolError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub(all) struct AckMetadata {
+  stream : String
+  consumer : String
+  delivered : String
+  stream_sequence : String
+  consumer_sequence : String
+  timestamp : String
+  pending : String
+} derive(ToJson, @debug.Debug)
+pub fn AckMetadata::to_json(Self) -> Json
+pub fn AckMetadata::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ApiRequest {
+  subject : String
+  body : String
+} derive(ToJson, @debug.Debug, @json.FromJson)
+pub fn ApiRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ApiRequest::to_json(Self) -> Json
+pub fn ApiRequest::to_repr(Self) -> @debug.Repr
+
+pub struct Decoder {
+  mut buffer : Array[Byte]
+  max_payload : Int
+  mut failed : Bool
+}
+pub fn Decoder::feed(Self, Bytes) -> Array[Frame] raise
+pub fn Decoder::finish(Self) -> Unit raise ProtocolError
+pub fn Decoder::new(max_payload? : Int) -> Self raise ProtocolError
+
+pub(all) struct Frame {
+  kind : String
+  subject : String
+  sid : String
+  reply : String
+  headers : Array[Header]
+  status : Int
+  payload : Bytes
+} derive(@debug.Debug)
+pub fn Frame::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Header {
+  name : String
+  value : String
+} derive(ToJson, @debug.Debug, @json.FromJson)
+pub fn Header::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Header::to_json(Self) -> Json
+pub fn Header::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PublishAck {
+  stream : String
+  sequence : String
+  duplicate : Bool
+} derive(ToJson, @debug.Debug)
+pub fn PublishAck::to_json(Self) -> Json
+pub fn PublishAck::to_repr(Self) -> @debug.Repr
+
+pub struct Window {
+  limit : Int
+  pending : Map[String, Bool]
+}
+pub fn Window::count(Self) -> Int
+pub fn Window::new(limit? : Int) -> Self raise ProtocolError
+pub fn Window::release(Self, String) -> Unit
+pub fn Window::reserve(Self, String) -> Unit raise ProtocolError
+
+// Type aliases
+
+// Traits

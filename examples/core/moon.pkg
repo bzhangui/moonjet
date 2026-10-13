@@ -1,0 +1,5 @@
+import {
+  "bzhangui/moonjet/core" @jet,
+}
+
+pkgtype(kind: "executable")

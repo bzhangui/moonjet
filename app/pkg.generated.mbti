@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bzhangui/moonjet/app"
+
+// Values
+pub fn command(String) -> String
+
+pub fn decode(String, Bytes) -> String
+
+pub fn encode(String, Bytes) -> Bytes raise
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
