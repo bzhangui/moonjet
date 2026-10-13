@@ -28,3 +28,15 @@ test "header status and empty message" {
   assert_true(frames.length() == 1 && frames[0].status == 503)
   assert_true(frames[0].payload.is_empty())
 }
+
+///|
+test "JetStream nanosecond durations are JSON numbers not Int64 strings" {
+  let stream=api_request("stream.create","EVENTS",filter="events.>")
+  let stream_body=parse_json(stream.body)
+  assert_true(json_field(stream_body,"duplicate_window") is Number(_,..))
+  let consumer=api_request("consumer.create","EVENTS",consumer="WORKER",filter="events.>",options={"ack_wait_ms":200})
+  let config=json_field(parse_json(consumer.body),"config")
+  assert_true(json_field(config,"ack_wait")==200000000)
+  let pull=api_request("consumer.next","EVENTS",consumer="WORKER",options={"batch":2,"expires_ms":1000})
+  assert_true(json_field(parse_json(pull.body),"expires")==1000000000)
+}

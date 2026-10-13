@@ -63,6 +63,12 @@ fn option(options : Json, name : String, fallback : Int, minimum : Int, maximum 
 }
 
 ///|
+fn nanos(milliseconds : Int) -> Json {
+  let value=milliseconds.to_int64()*1000000L
+  Json::number(value.to_double(),repr="\{value}")
+}
+
+///|
 fn valid_sequence(value : String) -> Unit raise ProtocolError {
   guard value.length()>0 && value.length()<=19 else { raise Invalid("invalid sequence") }
   let mut integer = 0UL
@@ -85,7 +91,7 @@ pub fn api_request(action : String, stream : String, consumer? : String = "", fi
     "stream.create" => {
       validate_subject(filter,wildcards=true)
       subject += ".STREAM.CREATE."+stream
-      body={"name":Json(stream),"subjects":[Json(filter)],"storage":"file","retention":"limits","discard":"old","max_msgs":Json(option(options,"max_msgs",100000,1,1000000)),"max_bytes":Json(option(options,"max_bytes",104857600,1024,1073741824)),"duplicate_window":Json(120000000000L)}
+      body={"name":Json(stream),"subjects":[Json(filter)],"storage":"file","retention":"limits","discard":"old","max_msgs":Json(option(options,"max_msgs",100000,1,1000000)),"max_bytes":Json(option(options,"max_bytes",16777216,1024,1073741824)),"duplicate_window":nanos(120000)}
     }
     "stream.info" => subject += ".STREAM.INFO."+stream
     "message.get" => {
@@ -100,7 +106,7 @@ pub fn api_request(action : String, stream : String, consumer? : String = "", fi
       subject += ".CONSUMER.DURABLE.CREATE."+stream+"."+consumer
       let config : Map[String,Json] = Map([
         ("durable_name",Json(consumer)),("ack_policy",Json("explicit")),("filter_subject",Json(filter)),
-        ("deliver_policy",Json("all")),("ack_wait",Json(option(options,"ack_wait_ms",30000,100,300000).to_int64()*1000000L)),
+        ("deliver_policy",Json("all")),("ack_wait",nanos(option(options,"ack_wait_ms",30000,100,300000))),
         ("max_ack_pending",Json(option(options,"max_ack_pending",32,1,4096))),
         ("max_deliver",Json(option(options,"max_deliver",5,1,100))),
       ])
@@ -116,7 +122,7 @@ pub fn api_request(action : String, stream : String, consumer? : String = "", fi
     "consumer.next" => {
       guard consumer!="" else { raise Invalid("consumer required") }
       subject += ".CONSUMER.MSG.NEXT."+stream+"."+consumer
-      body={"batch":Json(option(options,"batch",1,1,256)),"expires":Json(option(options,"expires_ms",1000,10,30000).to_int64()*1000000L),"max_bytes":Json(option(options,"max_bytes",1048576,1,8388608))}
+      body={"batch":Json(option(options,"batch",1,1,256)),"expires":nanos(option(options,"expires_ms",1000,10,30000)),"max_bytes":Json(option(options,"max_bytes",1048576,1,8388608))}
     }
     _ => raise Invalid("unsupported JetStream action")
   }
