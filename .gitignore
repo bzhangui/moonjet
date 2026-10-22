@@ -6,3 +6,6 @@ node_modules/
 coverage/
 *.log
 *申报书*.md
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

@@ -28,3 +28,10 @@ test('malformed historical base64 cannot be silently returned as empty payload',
   const c=new Client('nats://127.0.0.1:1');c.manage=async()=>({message:{subject:'events.a',seq:'1',data:'????'}});
   try{await assert.rejects(c.getMessage('TEST','1'),/base64/);}finally{c.close();}
 });
+test('connection options reject prototype and symbol keys instead of ignoring safety settings',()=>{
+  for(const options of [null,[],Object.create({rejectUnauthorized:false}),{[Symbol('security')]:false}])assert.throws(()=>new Client('nats://127.0.0.1:1',options));
+});
+test('pull rejects a response belonging to another stream before exposing delivery',async()=>{
+  const c=new Client('nats://127.0.0.1:1');c.exchange=async()=>[{metadata:{stream:'OTHER',consumer:'WORKER'}}];
+  try{await assert.rejects(c.fetch('TEST','WORKER'),/identity mismatch/);}finally{c.close();}
+});

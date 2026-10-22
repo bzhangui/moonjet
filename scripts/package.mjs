@@ -8,8 +8,8 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'))
 const built=spawnSync(process.execPath,['scripts/build.mjs'],{cwd:root,stdio:'inherit'});if(built.status!==0)throw new Error('Build failed');
 const parent=path.join(root,'.local/releases');fs.mkdirSync(parent,{recursive:true});
 const destination=path.join(parent,'moonjet-'+version+'-'+process.platform+'-'+process.arch+'-'+randomUUID().slice(0,8));fs.mkdirSync(destination);
-const allowed=['LICENSE','NOTICE','SECURITY.md','licenses/MoonBit-Apache-2.0.txt','docs/OPERATIONS.md','scripts/console.ps1','开始使用.cmd','_build/js/release/build/cmd/bridge/bridge.js','platform/client.mjs','examples/server.mjs','examples/demo.mjs','scripts/install-server.mjs'];
-const manifest={format:1,name:'MoonJet',version,runtime:'Node >=22',files:{}};
+const allowed=['LICENSE','NOTICE','SECURITY.md','licenses/MoonBit-Apache-2.0.txt','docs/OPERATIONS.md','docs/WORKER.md','scripts/console.ps1','开始使用.cmd','_build/js/release/build/cmd/bridge/bridge.js','platform/client.mjs','platform/worker.mjs','examples/server.mjs','examples/demo.mjs','examples/inbox-store.mjs','examples/idempotent-worker.mjs','scripts/install-server.mjs'];
+const manifest={format:1,name:'MoonJet',version,runtime:'Node >=22.13',files:{}};
 const hash=b=>createHash('sha256').update(b).digest('hex');
 for(const rel of allowed){const source=path.join(root,rel),target=path.join(destination,rel);if(!fs.statSync(source).isFile())throw new Error('Missing bundle file '+rel);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(source,target,fs.constants.COPYFILE_EXCL);manifest.files[rel]=hash(fs.readFileSync(target));}
 for(const [rel,data] of [['README.md',fs.readFileSync(path.join(root,'docs/PORTABLE.md'))],['package.json',Buffer.from(JSON.stringify({name:'moonjet-portable',version,private:true,type:'module'}))]]){fs.writeFileSync(path.join(destination,rel),data,{flag:'wx'});manifest.files[rel]=hash(data);}

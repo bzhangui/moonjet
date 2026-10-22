@@ -162,6 +162,29 @@ fn command_impl(arguments : String) -> Json raise {
   let args = @protocol.parse_json(arguments)
   let current_action = value_text(@protocol.json_field(args, "action"))
   match current_action {
+    "delivery" => {
+      let read_integer = fn(key : String, fallback : Int32) -> Int32 raise {
+        let value = @protocol.json_field(args, key)
+        if args is Object(map) && !map.contains(key) {
+          return fallback
+        }
+        guard value is Number(n, ..) &&
+          n >= 0.0 &&
+          n <= 3600000.0 &&
+          n == n.to_int().to_double() else {
+          raise @protocol.Invalid("invalid delivery integer")
+        }
+        n.to_int()
+      }
+      let policy = @protocol.DeliveryPolicy::new(
+        max_deliveries=read_integer("max_deliveries", 5),
+        initial_delay_ms=read_integer("initial_delay_ms", 100),
+        max_delay_ms=read_integer("max_delay_ms", 30000),
+      )
+      Json(
+        policy.on_failure(value_text(@protocol.json_field(args, "delivered"))),
+      )
+    }
     "api" =>
       Json(
         @protocol.api_request(

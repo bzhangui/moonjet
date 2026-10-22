@@ -1,5 +1,5 @@
 {
-  "name":"moonjet-sdk", "version":"0.1.1", "private":true, "type":"module",
-  "engines":{"node":">=22"},
-  "scripts":{"build":"node scripts/build.mjs","test":"node --test tests/*.test.mjs","validate":"node scripts/validate.mjs","demo":"node examples/demo.mjs"}
+  "name":"moonjet-sdk", "version":"0.2.0", "private":true, "type":"module",
+  "engines":{"node":">=22.13"},
+  "scripts":{"build":"node scripts/build.mjs","test":"node --test tests/*.test.mjs","validate":"node scripts/validate.mjs","demo":"node examples/demo.mjs","demo:worker":"node examples/idempotent-worker.mjs"}
 }

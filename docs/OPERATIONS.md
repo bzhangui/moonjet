@@ -1,5 +1,7 @@
 # 协议、预算与恢复
 
+0.2.0 新增有界 PullWorker、MoonBit DeliveryPolicy、脱敏 stats 和 SQLite 事务幂等示例，完整参数/失败处置见 [WORKER](WORKER.md)。工作器成功后双 ACK，失败有界延迟；超时/投递耗尽停止且不自动 TERM，旧连接投递禁止确认。不忽略处理函数尚未退出的事实，不宣称跨库或外部副作用恰好一次。
+
 核心可四目标复用，app 桥与 platform/client.mjs 为当前联网实现。支持 INFO/PING/PONG/+OK/-ERR/MSG/HMSG 与 PUB/HPUB/SUB/UNSUB，二进制和重复头部。
 
 控制文本4096、头部8192字节/64项；SDK发布消息1 MiB含头部，RPC/flush各32，默认待写socket2 MiB，pull最多256、累计返回8 MiB。API JSON2 MiB/24层，适配接收帧2 MiB，为历史回读的Base64膨胀留余量；历史业务数据仍最多1 MiB。CORE codec硬上限8 MiB，单次feed最多1 MiB，可分块。超过预算拒绝。

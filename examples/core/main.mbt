@@ -11,6 +11,16 @@ fn main {
     )
     println(create.subject)
     println(create.body)
+    let policy = @jet.DeliveryPolicy::new(
+      max_deliveries=3,
+      initial_delay_ms=50,
+      max_delay_ms=75,
+    )
+    guard policy.on_failure("1").delay_ms == 50 &&
+      policy.on_failure("2").delay_ms == 75 &&
+      policy.on_failure("3").action == "stop" else {
+      abort("bounded retry policy mismatch")
+    }
     println("portable core: verified=true")
   } catch {
     _ => abort("portable core example failed")

@@ -69,6 +69,23 @@ pub fn Decoder::feed(Self, Bytes) -> Array[Frame] raise
 pub fn Decoder::finish(Self) -> Unit raise ProtocolError
 pub fn Decoder::new(max_payload? : Int) -> Self raise ProtocolError
 
+pub(all) struct DeliveryDecision {
+  action : String
+  delay_ms : Int
+} derive(ToJson, @debug.Debug)
+pub fn DeliveryDecision::to_json(Self) -> Json
+pub fn DeliveryDecision::to_repr(Self) -> @debug.Repr
+
+pub struct DeliveryPolicy {
+  max_deliveries : Int
+  initial_delay_ms : Int
+  max_delay_ms : Int
+} derive(ToJson, @debug.Debug)
+pub fn DeliveryPolicy::new(max_deliveries? : Int, initial_delay_ms? : Int, max_delay_ms? : Int) -> Self raise ProtocolError
+pub fn DeliveryPolicy::on_failure(Self, String) -> DeliveryDecision raise ProtocolError
+pub fn DeliveryPolicy::to_json(Self) -> Json
+pub fn DeliveryPolicy::to_repr(Self) -> @debug.Repr
+
 pub(all) struct Frame {
   kind : String
   subject : String
