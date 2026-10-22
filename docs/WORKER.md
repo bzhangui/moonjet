@@ -43,6 +43,8 @@ stop() 与 run() 等待同一结果。停止拉取后，已取得但尚未分派
 
 JavaScript 不能强杀忽略 AbortSignal 的异步业务。stats().unsettledHandlers 和 quiescent 反映是否真的退出；`await worker.waitForHandlers(5000)` 有界等待并返回布尔。未静止时，不要立即复用相关资源、重启同一任务或假设没有后台副作用。重启应创建新工作器，重复 run() 返回同一 Promise。
 
+所有JS计时器都依赖事件循环；CPU密集同步处理或阻塞系统调用可阻止超时/心跳及时运行。重任务应放入受控Worker线程/独立进程并自行管理隔离与终止，不把本工作器的逻辑预算当作操作系统硬实时保证。
+
 DELIVERY_LIMIT：人工检查并显式回放；HANDLER_TIMEOUT/DRAIN_TIMEOUT：先确认处理静止；HEARTBEAT_FAILED/PULL_FAILED/SETTLEMENT_FAILED：恢复连接并核对业务记录；SERVER_DELIVERY_LIMIT/SERVER_PENDING_LIMIT/UNSAFE_HEARTBEAT：修正配置。工作器不自动建死信流、TERM或删除。limits 流可 getMessage 或新建 start_sequence 消费者取回，但仍受流保留容量/时间限制，不承诺永久保留。需独立监控服务端投递耗尽，制定归档/告警与重放权限。
 
 ## 事务幂等示例的边界

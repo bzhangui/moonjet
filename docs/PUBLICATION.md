@@ -1,10 +1,16 @@
 # 发布与复现记录
 
-## 0.2.0 发布准备 — 2026-10-22
+## 0.2.0 正式发布 — 2026-10-22
 
-新增MoonBit投递重试策略、有界消费工作器、脱敏指标、连接代次/结算保护与SQLite事务幂等样例。本机完整维护与18文件运行包通过，详见QUALITY_REPORT。正式注册表发布、匿名构建状态、ZIP校验和、独立下载消费者及本轮CI需分别完成后记录；此段不代表已经发布。
+- 已实际发布 **bzhangui/moonjet@0.2.0**，publish退出0、服务端200 OK；匿名清单确认build_status=success、latest_version=0.2.0、yanked=false，0.1.0/0.1.1未覆盖或撤回。
+- [匿名注册表清单](https://mooncakes.io/api/v0/manifest/bzhangui/moonjet@0.2.0)；上传源码提交ad7439ecda16fa367e309f022745584803b8e5ea，含大消息部分批次与短ACK期限修复。
+- 上传ZIP SHA-256：dcdf915fc99e200eede88b644836ced3a0774d03763d93408934a23600619bea，与注册表metadata.checksum一致；52条目核查不含申报书、凭据、私钥、数据库、报告、编译器或服务二进制，LICENSE/NOTICE均存在。
+- [本轮源码CI](https://github.com/bzhangui/moonjet/actions/runs/39774733181)：Windows、Linux、macOS检查/构建/核心与真实服务回归、覆盖、两套演示及18文件运行包实跑全部通过；不沿用旧版结果。
+- 独立空项目经moon add实际下载0.2.0；JS/Wasm/Wasm-GC/Native检查、release构建、核心样例和每目标2项公开API回归全部通过，共8次回归。新DeliveryPolicy、pull_status和历史硬化行为均验证，不用本仓库核心源码作依赖。
+- 本机18个不同核心用例×4目标、55项Node回归，核心397/458；完整边界见QUALITY_REPORT。Node>=22.13，仅联网参考适配和SQLite示例需要Node；Mooncakes提供四目标核心，不自动安装Node工作器或NATS服务。
+- 发布使用已授权登录主目录与独立0.10.15工具链根分离配置，没有复制登录凭据或改变全局旧SDK。dry-run遇到服务端202明确确认、旧CLI却非零退出的兼容问题；仅记作试运行接受，正式200及独立安装另行验证，不将失败命令当正式发布成功。
 
-Mooncakes提供四目标可复用核心DeliveryPolicy等API，不自动安装Node联网工作器、SQLite环境或NATS服务。完整运行按README从源码或本地运行包启动，Node>=22.13。此前0.1.0/0.1.1不覆盖。
+实际上传ZIP已私有保留，不会用发布后文档重新打包覆盖0.2.0。该不可变快照中的“发布准备”是发布前记录；本页为GitHub后补发布证据。私人申报书更新保留AI示例声明，仅在本地；源码、使用说明、许可证与合成样例公开。真实断电、集群、长期生产与外部试点缺口继续保留。
 
 ## 0.1.1 修复版 — 2026-10-13
 
