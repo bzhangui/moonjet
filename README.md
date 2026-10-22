@@ -70,7 +70,7 @@ const client = await Client.connect('tls://nats.example.com:4222', {
 
 断线时未完成请求拒绝并说明结果可能不确定，不盲目自动重发。使用相同 messageId 重试，超去重窗口仍需业务识别。重连只回原端点。断电、集群切换、长期生产与外部试点未验证。
 
-`bzhangui/moonjet/core` 提供 `Decoder`、`publish`、`subscribe`、`api_request`、`publish_ack`、`ack_metadata`、`Window`、`DeliveryPolicy`，见 `examples/core` 与 `core/pkg.generated.mbti`。发布状态见 [验收记录](docs/ACCEPTANCE.md)。
+`bzhangui/moonjet/core` 提供 `Decoder`、`publish`、`subscribe`、`api_request`、`publish_ack`、`ack_metadata`、`Window`、`DeliveryPolicy`、`pull_status`，见 `examples/core` 与 `core/pkg.generated.mbti`。Frame新增description字段，直接构造旧结构体的消费者需适配。发布状态见 [验收记录](docs/ACCEPTANCE.md)。
 
 `platform/worker.mjs` 的 PullWorker 提供 1..16 有界并发、业务成功后确认、失败延迟重投、working 心跳、优雅停机及迟到确认隔离。投递耗尽不自动 TERM/删除；超时不假装强杀业务。`client.stats()` / `worker.stats()` 为脱敏冻结快照。完整参数、故障处置和事务幂等边界见 [WORKER](docs/WORKER.md)。
 

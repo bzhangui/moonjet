@@ -20,7 +20,7 @@ export class PullWorker {
     this.counters={fetched:0,started:0,succeeded:0,handlerFailures:0,retried:0,exhausted:0,timedOut:0,abandoned:0,heartbeats:0,active:0,peakActive:0};
     this.state='idle';this.stopping=false;this.forced=false;this.active=new Set();this.handlers=new Set();this.done=null;this.drainTimer=null;this.failure=null;
   }
-  stats(){return Object.freeze({...this.counters,state:this.state,unsettledHandlers:this.handlers.size,quiescent:this.handlers.size===0});}
+  stats(){return Object.freeze({...this.counters,state:this.state,effectiveExpiresMs:this.pullExpiresMs??null,unsettledHandlers:this.handlers.size,quiescent:this.handlers.size===0});}
   async waitForHandlers(timeoutMs=5000){
     integer(timeoutMs,1,60000,'quiescence timeout');let timer;
     try{await Promise.race([Promise.all([...this.handlers]),new Promise(resolve=>{timer=setTimeout(resolve,timeoutMs);})]);return this.handlers.size===0;}
@@ -54,6 +54,7 @@ export class PullWorker {
       const rawAckWait=config.backoff?.[0]??config.ack_wait;
       const ackWait=rawAckWait/1000000;
       if(!Number.isSafeInteger(rawAckWait)||ackWait<60)throw new WorkerError('INVALID_ACK_WAIT');
+      this.pullExpiresMs=Math.min(this.options.expiresMs,Math.floor(ackWait/3));
       this.heartbeatMs=this.options.heartbeatMs??Math.min(1000,Math.max(20,Math.floor(ackWait/3)));
       if(this.heartbeatMs!==0&&(this.heartbeatMs<20||this.heartbeatMs>=ackWait/2))throw new WorkerError('UNSAFE_HEARTBEAT');
       signal?.addEventListener('abort',onAbort,{once:true});
@@ -62,7 +63,7 @@ export class PullWorker {
       this.state=this.stopping?'draining':'running';
       while(!this.stopping&&this.counters.started<this.options.maxMessages){
         let messages;
-        try{messages=await this.client.fetch(this.stream,this.consumer,{batch:Math.min(this.options.concurrency,this.options.maxMessages-this.counters.started),expiresMs:this.options.expiresMs});}
+        try{messages=await this.client.fetch(this.stream,this.consumer,{batch:Math.min(this.options.concurrency,this.options.maxMessages-this.counters.started),expiresMs:this.pullExpiresMs});}
         catch{throw new WorkerError('PULL_FAILED');}
         this.counters.fetched+=messages.length;
         if(this.stopping){this.counters.abandoned+=messages.length;break;}

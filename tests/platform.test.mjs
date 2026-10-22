@@ -19,3 +19,11 @@ test('connection loss rejects uncertain work and clears pending windows',async()
   const fixture=await peer(socket=>{socket.write(info);let input='';socket.on('data',bytes=>{input+=bytes.toString();if(input.includes('PING\r\n')){input=input.replace('PING\r\n','');socket.write('PONG\r\n');}if(input.includes('PUB '))socket.destroy();});});let c;
   try{c=await Client.connect(fixture.url,{maxReconnects:0});await assert.rejects(c.request('service.owned',Buffer.from('x')),/unknown|lost/);assert.equal(c.pending.size,0);assert.equal(c.pongs.length,0);await assert.rejects(c.waitConnected(),/exhausted/);}finally{c?.close();await fixture.close();}
 });
+test('pull completion 409 is distinct from deleted consumer and oversized first message',async()=>{
+  await loadCore();
+  for(const description of ['Consumer Deleted','Message Size Exceeds MaxBytes']){
+    const header=Buffer.from('NATS/1.0 409 '+description+'\r\n\r\n');
+    const fixture=await peer(socket=>{socket.write(info);let input='',sid,subject;socket.on('data',bytes=>{input+=bytes.toString();while(input.includes('\r\n')){const index=input.indexOf('\r\n'),line=input.slice(0,index);input=input.slice(index+2);if(line==='PING')socket.write('PONG\r\n');if(line.startsWith('SUB ')){[,subject,sid]=line.split(' ');}if(line.startsWith('PUB ')&&sid){socket.write(Buffer.concat([Buffer.from('HMSG '+subject+' '+sid+' '+header.length+' '+header.length+'\r\n'),header,Buffer.from('\r\n')]));sid=null;}}});});let c;
+    try{c=await Client.connect(fixture.url,{maxReconnects:0});await assert.rejects(c.fetch('TEST','WORKER'),/409/);assert.equal(c.pending.size,0);}finally{c?.close();await fixture.close();}
+  }
+});

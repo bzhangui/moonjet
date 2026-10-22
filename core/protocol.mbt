@@ -29,6 +29,7 @@ pub(all) struct Frame {
   reply : String
   headers : Array[Header]
   status : Int32
+  description : String
   payload : Bytes
 } derive(Debug)
 
@@ -198,7 +199,7 @@ pub fn unsubscribe(sid : String) -> Bytes raise ProtocolError {
 }
 
 ///|
-fn parse_headers(data : Bytes) -> (Array[Header], Int32) raise {
+fn parse_headers(data : Bytes) -> (Array[Header], Int32, String) raise {
   let source = @utf8.decode(data)
   guard source.has_suffix("\r\n\r\n") else {
     raise Invalid("invalid header terminator")
@@ -241,7 +242,12 @@ fn parse_headers(data : Bytes) -> (Array[Header], Int32) raise {
     headers.push({ name, value, })
     guard headers.length() <= 64 else { raise Invalid("header count exceeded") }
   }
-  (headers, status)
+  let description = if status != 0 && lines[0].length() > 12 {
+    lines[0][13:].to_owned()
+  } else {
+    ""
+  }
+  (headers, status, description)
 }
 
 ///|
@@ -311,12 +317,12 @@ fn Decoder::parse(self : Decoder, data : Bytes) -> Array[Frame] raise {
       let payload = Bytes::from_array(
         self.buffer[start + header_length:start + total],
       )
-      let (headers, status) = if with_headers {
+      let (headers, status, description) = if with_headers {
         parse_headers(
           Bytes::from_array(self.buffer[start:start + header_length]),
         )
       } else {
-        ([], 0)
+        ([], 0, "")
       }
       out.push({
         kind,
@@ -325,6 +331,7 @@ fn Decoder::parse(self : Decoder, data : Bytes) -> Array[Frame] raise {
         reply,
         headers,
         status,
+        description,
         payload,
       })
       cursor = start + total + 2
@@ -352,6 +359,7 @@ fn Decoder::parse(self : Decoder, data : Bytes) -> Array[Frame] raise {
         reply: "",
         headers: [],
         status: 0,
+        description: "",
         payload,
       })
       cursor = line_end + 2

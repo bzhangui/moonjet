@@ -23,7 +23,7 @@ processInYourTransaction 不是 SDK 内置函数。完整可运行样例：`npm 
 | --- | --- | --- |
 | concurrency | 1 | 1..16；一批完成后再拉下一批，无隐藏预取队列 |
 | maxMessages | 1000000 | 1..1000000；投递次数，包含重试，不是成功业务数 |
-| expiresMs | 100 | 50..1000；服务端拉取期限 |
+| expiresMs | 100 | 50..1000；请求期限上限，实际再封顶为 AckWait/3，避免批次未满却耗尽 ACK 等待 |
 | handlerTimeoutMs | 30000 | 50..300000；超时停止，不自动重试可能仍有副作用的处理 |
 | drainTimeoutMs | 5000 | 50..60000；停机等待预算，超时禁止迟到的新 ACK |
 | heartbeatMs | 自动 | AckWait/3 与1000ms较小者；显式0禁用，非0至少20ms且小于 AckWait/2 |
@@ -58,3 +58,5 @@ Node >=22.13 可直接使用 node:sqlite；22.x 仍可能显示 ExperimentalWarn
 client.stats() 返回连接/重连、请求失败/峰值、发布/去重、投递/重投、ACK/NAK/TERM/working、协议收发字节和当前等待量。worker.stats() 返回成功/失败/重试/耗尽/超时/放弃、并发峰值、尚未退出的处理数。冻结快照不含端点、账号、凭据、业务ID、subject、payload或原始异常。字节数是协议层计数，不是 TLS 网络流量；本地放弃不代表服务端删除或业务成功。
 
 官方语义参考：[NATS 确认与重投](https://docs.nats.io/learn/jetstream/acknowledgment)、[pull 消费](https://docs.nats.io/learn/jetstream/pull-consumers)。真实断电、集群故障、长期生产和外部用户未验证。
+
+409 Batch Completed 正常结束；409 Message Size Exceeds MaxBytes 仅在已收到至少一条消息时返回部分批次，第一条就超预算仍失败。消费者删除等其他409仍明确拒绝，不把所有冲突当成功。核心 Frame 新增 description 字段，pull_status 按状态/说明/已收条数分类；直接构造 Frame 的旧消费者需补此字段。工作器实际拉取期限可看 stats().effectiveExpiresMs，网络延迟仍可能触发重投，不替代业务幂等。[官方服务端状态定义](https://github.com/nats-io/nats-server/blob/v2.15.1/server/consumer.go)。

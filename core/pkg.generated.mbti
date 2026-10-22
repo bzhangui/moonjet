@@ -23,6 +23,8 @@ pub fn publish(String, Bytes, reply? : String, headers? : Array[Header], max_pay
 
 pub fn publish_ack(String) -> PublishAck raise
 
+pub fn pull_status(Int, String, received? : Int) -> String
+
 pub fn reconnect_delay(Int) -> Int raise ProtocolError
 
 pub fn sequence_value(Json) -> String raise ProtocolError
@@ -93,6 +95,7 @@ pub(all) struct Frame {
   reply : String
   headers : Array[Header]
   status : Int
+  description : String
   payload : Bytes
 } derive(@debug.Debug)
 pub fn Frame::to_repr(Self) -> @debug.Repr

@@ -21,6 +21,10 @@ fn main {
       policy.on_failure("3").action == "stop" else {
       abort("bounded retry policy mismatch")
     }
+    guard @jet.pull_status(409, "Batch Completed") == "end" &&
+      @jet.pull_status(409, "Consumer Deleted") == "error" else {
+      abort("pull status mismatch")
+    }
     println("portable core: verified=true")
   } catch {
     _ => abort("portable core example failed")

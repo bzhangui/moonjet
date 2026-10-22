@@ -89,6 +89,7 @@ pub fn decode(arguments : String, bytes : Bytes) -> String {
         "reply": Json(frame.reply),
         "headers": Json(frame.headers),
         "status": Json(frame.status),
+        "description": Json(frame.description),
         "data": Json(hex(frame.payload)),
       })
     }
@@ -162,6 +163,26 @@ fn command_impl(arguments : String) -> Json raise {
   let args = @protocol.parse_json(arguments)
   let current_action = value_text(@protocol.json_field(args, "action"))
   match current_action {
+    "pull_status" => {
+      guard @protocol.json_field(args, "status") is Number(n, ..) &&
+        n >= 0.0 &&
+        n <= 599.0 &&
+        n == n.to_int().to_double() else {
+        raise @protocol.Invalid("invalid status code")
+      }
+      Json(
+        @protocol.pull_status(
+          n.to_int(),
+          value_text(@protocol.json_field(args, "description")),
+          received=match @protocol.json_field(args, "received") {
+            Number(count, ..) if count >= 0.0 &&
+              count <= 256.0 &&
+              count == count.to_int().to_double() => count.to_int()
+            _ => raise @protocol.Invalid("invalid received count")
+          },
+        ),
+      )
+    }
     "delivery" => {
       let read_integer = fn(key : String, fallback : Int32) -> Int32 raise {
         let value = @protocol.json_field(args, key)

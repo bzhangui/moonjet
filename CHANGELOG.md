@@ -2,6 +2,9 @@
 
 ## 0.2.0 — 2026-10-22
 
+- 发布前扩展复测发现并修复字节预算结束的部分批次误丢弃：409 Batch Completed正常结束；Message Size Exceeds MaxBytes仅在已有消息时返回部分批次，首条超限及消费者删除等其他409仍失败。Frame新增description，直接构造结构体的消费者需适配；pull_status供四目标复用。
+- 工作器拉取等待封顶AckWait/3，避免短ACK等待、批次未满时阻塞处理；数据库示例close幂等。
+
 - MoonBit DeliveryPolicy：精确 uint64 投递次数、指数延迟 NAK、有限重试和停止决策，核心四目标复用。
 - PullWorker：1..16 并发、无预取队列、配置预检、成功双 ACK、working 心跳、优雅停机、超时/断线隔离与处理静止查询。
 - Client/worker 脱敏冻结指标；NAK/TERM 后禁止重复结算，旧连接投递禁止确认；拉取核对流/消费者身份。

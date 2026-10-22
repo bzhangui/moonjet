@@ -106,3 +106,15 @@ test('worker rejects incomplete consumer configuration and stops before dispatch
     await assert.rejects(new PullWorker(c,'JOBS','WORKER',()=>assert.fail('must not dispatch')).run(),e=>e.code===code);
   }
 }));
+test('byte-limited partial batches retain delivered messages and worker continues through large payloads',()=>fixture(async c=>{
+  for(let i=0;i<3;i++)await c.publish('jobs.large',Buffer.alloc(600000,i),{messageId:'owned-large-'+i});
+  const first=await c.fetch('JOBS','WORKER',{batch:3,expiresMs:100});assert.equal(first.length,1);await first[0].ack();
+  const worker=new PullWorker(c,'JOBS','WORKER',async({data})=>{assert.equal(data.length,600000);},{concurrency:2,maxMessages:2});
+  assert.equal((await worker.run()).succeeded,2);assert.equal(c.stats().acks,3);assert.equal(c.pending.size,0);
+  await c.createConsumer('JOBS','TINY','jobs.>');await assert.rejects(c.fetch('JOBS','TINY',{maxBytes:100}),/409/);assert.equal(c.pending.size,0);
+}));
+test('partial batch wait is capped below ACK wait before any handler dispatch',()=>fixture(async c=>{
+  await publish(c);const worker=new PullWorker(c,'JOBS','WORKER',async()=>{}, {concurrency:4,maxMessages:4,expiresMs:1000});
+  const done=worker.run();await ready(()=>worker.stats().succeeded===1);await worker.stop();await done;
+  assert.equal(worker.stats().effectiveExpiresMs,40);assert.equal(c.stats().redeliveries,0);assert.equal(c.stats().acks,1);
+},{ack_wait_ms:120}));

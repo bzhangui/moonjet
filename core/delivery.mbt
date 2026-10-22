@@ -1,4 +1,32 @@
 ///|
+pub fn pull_status(
+  code : Int32,
+  description : String,
+  received~ : Int32 = 0,
+) -> String {
+  if received < 0 || received > 256 {
+    return "error"
+  }
+  if code == 100 {
+    "heartbeat"
+  } else if code == 404 ||
+    code == 408 ||
+    (
+      code == 409 &&
+      (
+        description == "Batch Completed" ||
+        (description == "Message Size Exceeds MaxBytes" && received > 0)
+      )
+    ) {
+    "end"
+  } else if code == 0 {
+    "message"
+  } else {
+    "error"
+  }
+}
+
+///|
 /// Bounded retry decisions are independent of sockets and timers.
 pub struct DeliveryPolicy {
   max_deliveries : Int32
@@ -8,6 +36,31 @@ pub struct DeliveryPolicy {
 
 ///|
 pub extend DeliveryPolicy with ToJson::{to_json}
+
+///|
+test "pull completion preserves status description and does not swallow other conflicts" {
+  let header = b"NATS/1.0 409 Batch Completed\r\nNats-Pending-Messages: 2\r\n\r\n"
+  let wire = @utf8.encode(
+      "HMSG inbox 1 \{header.length()} \{header.length()}\r\n",
+    ) +
+    header +
+    b"\r\n"
+  let frame = Decoder::new().feed(wire)[0]
+  assert_true(frame.description == "Batch Completed")
+  assert_true(pull_status(frame.status, frame.description) == "end")
+  assert_true(pull_status(409, "Consumer Deleted") == "error")
+  assert_true(pull_status(409, "Message Size Exceeds MaxBytes") == "error")
+  assert_true(
+    pull_status(409, "Message Size Exceeds MaxBytes", received=1) == "end",
+  )
+  assert_true(pull_status(409, "Consumer Deleted", received=1) == "error")
+  assert_true(pull_status(408, "", received=257) == "error")
+  assert_true(pull_status(503, "No Responders") == "error")
+  assert_true(pull_status(404, "No Messages") == "end")
+  assert_true(pull_status(408, "Request Timeout") == "end")
+  assert_true(pull_status(100, "Idle Heartbeat") == "heartbeat")
+  assert_true(pull_status(0, "") == "message")
+}
 
 ///|
 pub extend DeliveryPolicy with @debug.Debug::{to_repr}

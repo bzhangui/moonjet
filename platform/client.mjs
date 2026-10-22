@@ -92,7 +92,7 @@ export class Client extends EventEmitter {
       const timer=setTimeout(()=>finish(new Error('Request timeout; delivery outcome may be unknown')),timeout);
       this.pending.set(sid,{fail:finish,receive:frame=>{
         if(frame.status===100){if(frame.reply){try{this.raw({action:'pub',subject:frame.reply},Buffer.alloc(0));}catch(error){finish(error);}}return;}
-        if(frame.status){if(pull&&[404,408].includes(frame.status))finish();else finish(new Error('NATS response status '+frame.status));return;}
+        if(frame.status){if(pull&&command({action:'pull_status',status:frame.status,description:frame.description,received:messages.length})==='end')finish();else finish(new Error('NATS response status '+frame.status));return;}
         bytes+=frame.data.length/2;if(bytes>this.maxReceive){finish(new Error('Response payload accumulation budget'));return;}if(pull){const message=new Message(this,frame);this.count('deliveries');if(message.metadata.delivered!=='1')this.count('redeliveries');messages.push(message);}else messages.push(Buffer.from(frame.data,'hex'));if(messages.length>=batch)finish();
       }});
       this.count('requests');this.counters.peakPending=Math.max(this.counters.peakPending,this.pending.size);

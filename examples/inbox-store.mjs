@@ -22,5 +22,5 @@ export class InboxStore {
     }catch(error){this.db.exec('ROLLBACK');throw error;}
   }
   snapshot(){return {events:this.db.prepare('SELECT COUNT(*) AS n FROM inbox').get().n,total:this.db.prepare('SELECT amount FROM totals WHERE id=1').get().amount};}
-  close(){this.db.close();}
+  close(){if(this.closed)return;this.db.close();this.closed=true;}
 }

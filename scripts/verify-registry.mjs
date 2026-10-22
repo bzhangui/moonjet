@@ -22,6 +22,10 @@ test "registered public delivery policy caps retry and rejects overflow" {
   assert_true(policy.on_failure("2").delay_ms == 150)
   assert_true(policy.on_failure("3").action == "stop")
   assert_true(policy.on_failure("18446744073709551615").action == "stop")
+  assert_true(@jet.pull_status(409, "Batch Completed") == "end")
+  assert_true(@jet.pull_status(409, "Consumer Deleted") == "error")
+  assert_true(@jet.pull_status(409, "Message Size Exceeds MaxBytes", received=1) == "end")
+  assert_true(@jet.pull_status(409, "Message Size Exceeds MaxBytes") == "error")
   assert_true(try { ignore(policy.on_failure("18446744073709551616")); false } catch { _ => true })
 }
 `,{flag:'wx'});
