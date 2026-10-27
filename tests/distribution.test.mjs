@@ -30,3 +30,17 @@ test('Windows launcher preserves Chinese text and source-only maintenance guard'
   assert.ok(fs.readFileSync(path.join(root,'开始使用.cmd'),'utf8').includes('-NoProfile'));
 });
 
+test('registry publication policy denies unlisted files and restores only explicit public paths',()=>{
+  const rules=fs.readFileSync(path.join(root,'.moonignore'),'utf8').split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!line.startsWith('#'));
+  assert.equal(rules[0],'*');
+  for(const rule of rules.slice(1)){
+    assert.match(rule,/^!\/[\p{L}\p{N}_./-]+$/u);
+    const relative=rule.slice(2).replace(/\/$/,'');
+    assert.ok(!relative.split('/').some(part=>['.','..','.local','.moon','.git','node_modules','_build','coverage'].includes(part)));
+    assert.ok(!/申报|credentials|\.env|\.sqlite|\.pem|\.key|\.log$/i.test(relative));
+    const actual=fs.lstatSync(path.join(root,relative));assert.equal(actual.isSymbolicLink(),false);
+    assert.equal(actual.isDirectory(),rule.endsWith('/'));
+  }
+  for(const required of ['LICENSE','NOTICE','moon.mod','platform/client.mjs','scripts/toolchain.mjs'])assert.ok(rules.includes('!/'+required));
+});
+

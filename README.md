@@ -6,9 +6,9 @@
 
 ## 实现范围
 
-当前源码版本为 **0.2.0**。新增有界消费工作器、MoonBit 重试决策、脱敏指标和 SQLite 业务幂等样例；保留 0.1.1 硬化修复。[工作器指南](docs/WORKER.md)、[更新记录](CHANGELOG.md)、[复测报告](docs/QUALITY_REPORT.md)；实际注册表状态见 [发布记录](docs/PUBLICATION.md)。
+当前源码版本为 **0.2.1**。包含有界消费工作器、MoonBit 重试决策、脱敏指标和 SQLite 业务幂等样例，保留 0.1.1 硬化修复。[工作器指南](docs/WORKER.md)、[更新记录](CHANGELOG.md)、[复测报告](docs/QUALITY_REPORT.md)；实际注册表状态见 [发布记录](docs/PUBLICATION.md)。
 
-**2026-10-27 本地维护修复尚未推送或发布**：修正 API/响应失败漏计，增加分类指标、账号密码回归与私有工具链配置。已发布的 Mooncakes 0.2.0 是原有不可变快照，不含本轮 Node 适配和开发脚本改动；不以历史 CI 代替本轮验证。
+**0.2.1 发布准备**：修正 API/响应失败漏计，增加分类指标、账号密码回归、私有工具链配置和包文件白名单。注册表仍以发布记录中的实际确认结果为准，不将准备状态或历史 CI 当作本轮发布成功。旧版 0.2.0 不覆盖。
 
 MoonBit 实现协议、JetStream 请求/ACK/PubAck/元数据、精确 uint64、在途窗口与退避；Node 适配 TCP、证书 TLS、计时器和异步调度。核心四目标可复用；**当前联网为 Node/JS 参考适配**，不冒称 Native/Wasm 已联网。支持 durable pull，不是完整官方客户端。
 
@@ -75,7 +75,7 @@ const client = await Client.connect('tls://nats.example.com:4222', {
 
 ## 交付语义与维护
 
-核心安装入口：[Mooncakes](https://mooncakes.io/docs/bzhangui/moonjet)，0.2.0 命令为 `moon add bzhangui/moonjet@0.2.0`。实际发布状态、安装与独立四目标验证见 [发布记录](docs/PUBLICATION.md)；完整联网工作器与 SQLite 示例仍需本仓库 Node 适配，不会由 moon add 自动安装。
+核心安装入口：[Mooncakes](https://mooncakes.io/docs/bzhangui/moonjet)，0.2.1 命令为 `moon add bzhangui/moonjet@0.2.1`，须先确认 [发布记录](docs/PUBLICATION.md) 已完成发布。完整联网工作器与 SQLite 示例仍需本仓库 Node 适配，不会由 moon add 自动安装。
 
 按至少一次处理。PubAck 表示接受发布，去重有窗口；双重 ACK 表示收到消费 ACK，不保证业务事务或独立磁盘 fsync。实际单节点突停出现已确认消息重投，示例以业务键去重处理。
 
@@ -85,7 +85,7 @@ const client = await Client.connect('tls://nats.example.com:4222', {
 
 `platform/worker.mjs` 的 PullWorker 提供 1..16 有界并发、业务成功后确认、失败延迟重投、working 心跳、优雅停机及迟到确认隔离。投递耗尽不自动 TERM/删除；超时不假装强杀业务。`client.stats()` / `worker.stats()` 为脱敏冻结快照。完整参数、故障处置和事务幂等边界见 [WORKER](docs/WORKER.md)。
 
-本轮未发布修复中，`requestFailures` 汇总已进入请求窗口的失败，新增 `exchangeFailures`、`apiErrors`、`responseFailures` 区分交换/API/响应校验，避免缺失流等 API 错误漏记。预检拒绝不计入已发送请求，原始 `request()` 返回不透明字节，不替调用方解析业务错误；详见工作器指南的指标口径。
+0.2.1 中，`requestFailures` 汇总已进入请求窗口的失败，新增 `exchangeFailures`、`apiErrors`、`responseFailures` 区分交换/API/响应校验，避免缺失流等 API 错误漏记。预检拒绝不计入已发送请求，原始 `request()` 返回不透明字节，不替调用方解析业务错误；详见工作器指南的指标口径。
 
 ```sh
 moon run examples/core --target native
