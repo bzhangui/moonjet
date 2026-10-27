@@ -59,6 +59,16 @@ Node >=22.13 可直接使用 node:sqlite；22.x 仍可能显示 ExperimentalWarn
 
 client.stats() 返回连接/重连、请求失败/峰值、发布/去重、投递/重投、ACK/NAK/TERM/working、协议收发字节和当前等待量。worker.stats() 返回成功/失败/重试/耗尽/超时/放弃、并发峰值、尚未退出的处理数。冻结快照不含端点、账号、凭据、业务ID、subject、payload或原始异常。字节数是协议层计数，不是 TLS 网络流量；本地放弃不代表服务端删除或业务成功。
 
+2026-10-27 未发布维护修复调整客户端口径：
+
+- `requests`：已获得在途窗口的请求数。参数预检、断开状态下拒绝和窗口已满不计入；进入窗口后的编码、写入或背压失败仍属于该请求。
+- `exchangeFailures`：请求交换失败，包括超时、断线、发送失败、响应状态错误和协议错误；不等同于纯网络错误率。
+- `apiErrors`：高层管理请求或发布确认被 MoonBit 判定为 JetStream API 错误。只保留计数，不记录服务端 description。
+- `responseFailures`：高层接口的 UTF-8/JSON/PubAck、历史消息身份或 Base64、拉取身份校验失败。
+- `requestFailures`：上述三类总数，同一请求只记一次；成功的查询、空拉取和重复发布不增加。各计数封顶 Number.MAX_SAFE_INTEGER，未封顶时总数等于三类之和。旧版仅统计交换失败，跨版本比较告警阈值需注意口径变化。
+
+底层 `request()` 只返回不透明字节，不自动解析 JetStream/应用 JSON；调用者自行解释的业务失败不会被自动计入 apiErrors。三个分类是进程内累计计数，不是持久审计或 Prometheus exporter。原始异常不进入 stats，但调用方记录异常仍应遵守脱敏要求。
+
 官方语义参考：[NATS 确认与重投](https://docs.nats.io/learn/jetstream/acknowledgment)、[pull 消费](https://docs.nats.io/learn/jetstream/pull-consumers)。真实断电、集群故障、长期生产和外部用户未验证。
 
 409 Batch Completed 正常结束；409 Message Size Exceeds MaxBytes 仅在已收到至少一条消息时返回部分批次，第一条就超预算仍失败。消费者删除等其他409仍明确拒绝，不把所有冲突当成功。核心 Frame 新增 description 字段，pull_status 按状态/说明/已收条数分类；直接构造 Frame 的旧消费者需补此字段。工作器实际拉取期限可看 stats().effectiveExpiresMs，网络延迟仍可能触发重投，不替代业务幂等。[官方服务端状态定义](https://github.com/nats-io/nats-server/blob/v2.15.1/server/consumer.go)。

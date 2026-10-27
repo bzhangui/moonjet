@@ -15,6 +15,16 @@ const encode=(args,payload=Buffer.alloc(0))=>{const bytes=Buffer.from(core.encod
 const bound=(value,min,max,label)=>{if(!Number.isInteger(value)||value<min||value>max)throw new Error('Invalid '+label+' budget');return value;};
 function checkedOptions(value,allowed){if(!value||typeof value!=='object'||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw new Error('Invalid options object');for(const key of Reflect.ownKeys(value))if(!allowed.includes(key))throw new Error('Unsupported request option');return value;}
 const jsonText=bytes=>new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+// Only wrap reply interpretation, never the exchange itself: one failed request
+// must not be counted twice when a transport error propagates through manage().
+function interpretResponse(client,read){
+  try{return read();}
+  catch(error){
+    client.count('requestFailures');
+    client.count(error.message?.startsWith('JetStream API error:')?'apiErrors':'responseFailures');
+    throw error;
+  }
+}
 
 export class Message {
   constructor(client,frame){this.client=client;this.generation=client.generation;this.subject=frame.subject;this.reply=frame.reply;this.headers=frame.headers;this.data=Buffer.from(frame.data,'hex');this.metadata=command({action:'metadata',subject:this.reply});this.confirmed=false;this.settled=false;this.settling=false;}
@@ -37,7 +47,7 @@ export class Client extends EventEmitter {
     if(this.endpoint.protocol==='nats:'&&(options.token||options.user||options.password)&&!['localhost','127.0.0.1','[::1]'].includes(this.endpoint.hostname)&&!options.allowPlainAuth)throw new Error('Remote plaintext credentials require explicit allowPlainAuth; prefer TLS');
     bound(this.options.timeout,50,30000,'timeout');bound(this.options.maxReconnects,0,20,'reconnect');bound(this.options.maxPendingBytes,1024,16777216,'pending bytes');
     this.id=randomUUID();this.next=0;this.pending=new Map();this.pongs=[];this.status='disconnected';this.closed=false;this.attempts=0;this.timer=null;this.maxPayload=1048576;this.maxReceive=8388608;this.generation=0;
-    this.counters={connections:0,reconnects:0,disconnects:0,requests:0,requestFailures:0,peakPending:0,published:0,duplicates:0,deliveries:0,redeliveries:0,acks:0,naks:0,terms:0,working:0,bytesIn:0,bytesOut:0};
+    this.counters={connections:0,reconnects:0,disconnects:0,requests:0,requestFailures:0,exchangeFailures:0,apiErrors:0,responseFailures:0,peakPending:0,published:0,duplicates:0,deliveries:0,redeliveries:0,acks:0,naks:0,terms:0,working:0,bytesIn:0,bytesOut:0};
   }
   count(key,amount=1){if(Object.hasOwn(this.counters,key))this.counters[key]=Math.min(Number.MAX_SAFE_INTEGER,this.counters[key]+amount);}
   stats(){return Object.freeze({...this.counters,status:this.status,pending:this.pending.size,flushPending:this.pongs.length,bufferedBytes:this.socket?.writableLength||0});}
@@ -88,7 +98,7 @@ export class Client extends EventEmitter {
     try{command({action:'reserve',session:this.id,key:sid});}catch(error){return Promise.reject(error);}
     return new Promise((resolve,reject)=>{
       const messages=[];let bytes=0,done=false;
-      const finish=(error)=>{if(done)return;done=true;clearTimeout(timer);this.pending.delete(sid);command({action:'release',session:this.id,key:sid});if(this.status==='connected'){try{this.raw({action:'unsub',sid});}catch{this.socket?.destroy();}}if(error){this.count('requestFailures');reject(error);}else resolve(pull?messages:messages[0]);};
+      const finish=(error)=>{if(done)return;done=true;clearTimeout(timer);this.pending.delete(sid);command({action:'release',session:this.id,key:sid});if(this.status==='connected'){try{this.raw({action:'unsub',sid});}catch{this.socket?.destroy();}}if(error){this.count('requestFailures');this.count('exchangeFailures');reject(error);}else resolve(pull?messages:messages[0]);};
       const timer=setTimeout(()=>finish(new Error('Request timeout; delivery outcome may be unknown')),timeout);
       this.pending.set(sid,{fail:finish,receive:frame=>{
         if(frame.status===100){if(frame.reply){try{this.raw({action:'pub',subject:frame.reply},Buffer.alloc(0));}catch(error){finish(error);}}return;}
@@ -101,13 +111,23 @@ export class Client extends EventEmitter {
   }
   request(subject,payload=Buffer.alloc(0),options={}){return this.exchange(subject,payload,options);}
   api(operation,stream,consumer='',filter='events.>',options={}){return command({action:'api',operation,stream,consumer,filter,options,prefix:this.options.apiPrefix||'$JS.API'});}
-  async manage(operation,stream,consumer='',filter='events.>',options={}){const req=this.api(operation,stream,consumer,filter,options);const data=await this.request(req.subject,Buffer.from(req.body));return command({action:'response',source:jsonText(data)});}
+  async manage(operation,stream,consumer='',filter='events.>',options={}){const req=this.api(operation,stream,consumer,filter,options);const data=await this.request(req.subject,Buffer.from(req.body));return interpretResponse(this,()=>command({action:'response',source:jsonText(data)}));}
   createStream(name,subject,options={}){return this.manage('stream.create',name,'',subject,options);}
   streamInfo(name){return this.manage('stream.info',name);}
   createConsumer(stream,name,subject,options={}){return this.manage('consumer.create',stream,name,subject,options);}
   consumerInfo(stream,name){return this.manage('consumer.info',stream,name);}
-  async publish(subject,payload,options={}){checkedOptions(options,['messageId']);const {messageId}=options;if(typeof messageId!=='string'||!messageId.length||Buffer.byteLength(messageId)>128)throw new Error('Provide stable messageId (1..128 bytes) for safe retry');const data=await this.request(subject,Buffer.from(payload),{headers:[{name:'Nats-Msg-Id',value:messageId}]});const ack=command({action:'publish_ack',source:jsonText(data)});this.count('published');if(ack.duplicate)this.count('duplicates');return {...ack,messageId};}
-  async fetch(stream,consumer,options={}){checkedOptions(options,['batch','expiresMs','maxBytes']);const {batch=1,expiresMs=1000,maxBytes=1048576}=options;const req=this.api('consumer.next',stream,consumer,'events.>',{batch,expires_ms:expiresMs,max_bytes:maxBytes});const messages=await this.exchange(req.subject,Buffer.from(req.body),{batch,timeout:expiresMs+500,pull:true});if(messages.some(m=>m.metadata.stream!==stream||m.metadata.consumer!==consumer))throw new Error('Consumer delivery identity mismatch');return messages;}
-  async getMessage(stream,sequence){if(typeof sequence!=='string'&&!(typeof sequence==='number'&&Number.isSafeInteger(sequence)&&sequence>0))throw new Error('Use decimal string for 64-bit sequence');const data=await this.manage('message.get',stream,'','events.>',{sequence:String(sequence)});const message=data?.message;if(!message||typeof message.subject!=='string'||String(message.seq)!==String(sequence))throw new Error('Historical response identity mismatch');const encoded=message.data===undefined?'':message.data;if(typeof encoded!=='string'||encoded.length>1398104||!(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)))throw new Error('Invalid historical base64 payload');const payload=Buffer.from(encoded,'base64');if(payload.length>1048576||payload.toString('base64')!==encoded)throw new Error('Invalid historical base64 payload');return {subject:message.subject,sequence:String(message.seq),data:payload};}
+  async publish(subject,payload,options={}){checkedOptions(options,['messageId']);const {messageId}=options;if(typeof messageId!=='string'||!messageId.length||Buffer.byteLength(messageId)>128)throw new Error('Provide stable messageId (1..128 bytes) for safe retry');const data=await this.request(subject,Buffer.from(payload),{headers:[{name:'Nats-Msg-Id',value:messageId}]});const ack=interpretResponse(this,()=>command({action:'publish_ack',source:jsonText(data)}));this.count('published');if(ack.duplicate)this.count('duplicates');return {...ack,messageId};}
+  async fetch(stream,consumer,options={}){checkedOptions(options,['batch','expiresMs','maxBytes']);const {batch=1,expiresMs=1000,maxBytes=1048576}=options;const req=this.api('consumer.next',stream,consumer,'events.>',{batch,expires_ms:expiresMs,max_bytes:maxBytes});const messages=await this.exchange(req.subject,Buffer.from(req.body),{batch,timeout:expiresMs+500,pull:true});return interpretResponse(this,()=>{if(messages.some(m=>m.metadata.stream!==stream||m.metadata.consumer!==consumer))throw new Error('Consumer delivery identity mismatch');return messages;});}
+  async getMessage(stream,sequence){
+    if(typeof sequence!=='string'&&!(typeof sequence==='number'&&Number.isSafeInteger(sequence)&&sequence>0))throw new Error('Use decimal string for 64-bit sequence');
+    const data=await this.manage('message.get',stream,'','events.>',{sequence:String(sequence)});
+    return interpretResponse(this,()=>{
+      const message=data?.message;if(!message||typeof message.subject!=='string'||String(message.seq)!==String(sequence))throw new Error('Historical response identity mismatch');
+      const encoded=message.data===undefined?'':message.data;
+      if(typeof encoded!=='string'||encoded.length>1398104||!(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)))throw new Error('Invalid historical base64 payload');
+      const payload=Buffer.from(encoded,'base64');if(payload.length>1048576||payload.toString('base64')!==encoded)throw new Error('Invalid historical base64 payload');
+      return {subject:message.subject,sequence:String(message.seq),data:payload};
+    });
+  }
   close(){if(this.closed)return;this.closed=true;if(this.timer)clearTimeout(this.timer);this.failPending();this.status='closed';this.socket?.destroy();command({action:'close',session:this.id});this.emit('closed');}
 }

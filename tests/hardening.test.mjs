@@ -33,5 +33,5 @@ test('connection options reject prototype and symbol keys instead of ignoring sa
 });
 test('pull rejects a response belonging to another stream before exposing delivery',async()=>{
   const c=new Client('nats://127.0.0.1:1');c.exchange=async()=>[{metadata:{stream:'OTHER',consumer:'WORKER'}}];
-  try{await assert.rejects(c.fetch('TEST','WORKER'),/identity mismatch/);}finally{c.close();}
+  try{await assert.rejects(c.fetch('TEST','WORKER'),/identity mismatch/);assert.equal(c.stats().responseFailures,1);assert.equal(c.stats().requestFailures,1);}finally{c.close();}
 });

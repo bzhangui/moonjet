@@ -8,11 +8,22 @@
 
 当前源码版本为 **0.2.0**。新增有界消费工作器、MoonBit 重试决策、脱敏指标和 SQLite 业务幂等样例；保留 0.1.1 硬化修复。[工作器指南](docs/WORKER.md)、[更新记录](CHANGELOG.md)、[复测报告](docs/QUALITY_REPORT.md)；实际注册表状态见 [发布记录](docs/PUBLICATION.md)。
 
+**2026-10-27 本地维护修复尚未推送或发布**：修正 API/响应失败漏计，增加分类指标、账号密码回归与私有工具链配置。已发布的 Mooncakes 0.2.0 是原有不可变快照，不含本轮 Node 适配和开发脚本改动；不以历史 CI 代替本轮验证。
+
 MoonBit 实现协议、JetStream 请求/ACK/PubAck/元数据、精确 uint64、在途窗口与退避；Node 适配 TCP、证书 TLS、计时器和异步调度。核心四目标可复用；**当前联网为 Node/JS 参考适配**，不冒称 Native/Wasm 已联网。支持 durable pull，不是完整官方客户端。
 
 ## 安装和独立演示
 
 需要 [MoonBit](https://www.moonbitlang.com/download/) **moonc ≥ 0.10.15**、Node ≥ 22.13。维护 TLS 测试另需 OpenSSL ≥ 1.1.1；无 npm 第三方依赖。SQLite 示例使用 Node 内置 node:sqlite，不作为核心协议依赖。
+
+先用 `npm run toolchain -- --check` 检查实际选中的编译器。若全局版本过旧，可指定已安装的独立 SDK，不改全局环境：
+
+```powershell
+npm run toolchain -- --moon "C:\path\to\moon-sdk\bin\moon.exe"
+npm run toolchain -- --check
+```
+
+Unix 指定对应 SDK 的绝对路径 `/path/to/moon-sdk/bin/moon`。配置只保存在 Git 忽略的 `.local/toolchain.json`，不复制 SDK 或登录凭据、不自动安装/升级。选择顺序为 `MOON_BIN` → 私有配置 → `.local/toolchain/bin` → PATH；明确的 `MOON_BIN` 可配合 `MOON_HOME` 临时覆盖。配置缺失/损坏的 SDK 会明确报错，不静默退回旧版；更换目录后重新配置。直接执行 `moon ...` 仍使用终端自己的 PATH，本配置只用于项目 Node 构建、维护及验证脚本。
 
 ```sh
 git clone https://github.com/bzhangui/moonjet.git
@@ -73,6 +84,8 @@ const client = await Client.connect('tls://nats.example.com:4222', {
 `bzhangui/moonjet/core` 提供 `Decoder`、`publish`、`subscribe`、`api_request`、`publish_ack`、`ack_metadata`、`Window`、`DeliveryPolicy`、`pull_status`，见 `examples/core` 与 `core/pkg.generated.mbti`。Frame新增description字段，直接构造旧结构体的消费者需适配。发布状态见 [验收记录](docs/ACCEPTANCE.md)。
 
 `platform/worker.mjs` 的 PullWorker 提供 1..16 有界并发、业务成功后确认、失败延迟重投、working 心跳、优雅停机及迟到确认隔离。投递耗尽不自动 TERM/删除；超时不假装强杀业务。`client.stats()` / `worker.stats()` 为脱敏冻结快照。完整参数、故障处置和事务幂等边界见 [WORKER](docs/WORKER.md)。
+
+本轮未发布修复中，`requestFailures` 汇总已进入请求窗口的失败，新增 `exchangeFailures`、`apiErrors`、`responseFailures` 区分交换/API/响应校验，避免缺失流等 API 错误漏记。预检拒绝不计入已发送请求，原始 `request()` 返回不透明字节，不替调用方解析业务错误；详见工作器指南的指标口径。
 
 ```sh
 moon run examples/core --target native

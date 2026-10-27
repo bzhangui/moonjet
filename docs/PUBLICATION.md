@@ -1,5 +1,9 @@
 # 发布与复现记录
 
+## 2026-10-27 本地维护状态：未发布
+
+基于 0.2.0 修正 Node 适配失败指标，补充认证回归和开发工具链配置。未推送本轮 GitHub 源码，未发布 Mooncakes 或运行包，不覆盖下方已发布的 0.2.0。MoonBit 核心 API 未改变；本轮验证见 QUALITY_REPORT。历史 CI 成功不代表新源码已在三平台重跑。
+
 ## 0.2.0 正式发布 — 2026-10-22
 
 - 已实际发布 **bzhangui/moonjet@0.2.0**，publish退出0、服务端200 OK；匿名清单确认build_status=success、latest_version=0.2.0、yanked=false，0.1.0/0.1.1未覆盖或撤回。
