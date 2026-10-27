@@ -1,13 +1,13 @@
 # 更新记录
 
-## 0.2.1 — 2026-10-27（发布准备）
+## 0.2.1 — 2026-10-27
 
 - 修复高层管理请求和发布确认的 JetStream API 错误漏记；UTF-8/JSON/PubAck、历史回读及拉取身份校验失败也纳入统计，不重复记交换错误。
 - `requestFailures` 改为失败总数，新增 `exchangeFailures` / `apiErrors` / `responseFailures`。原字段保留但口径扩展，告警阈值需复核；预检拒绝和底层 request 的业务解释边界明确。
 - 提供 `npm run toolchain -- --check` 和 `--moon <绝对路径>`，私有配置选中已安装 SDK，自动匹配 SDK 根目录，拒绝过旧/无效配置，不改变全局 SDK 或复制凭据。修正版本比较对未来补丁号的兼容性。
 - 新增 14 项 Node 回归（69 项总数）：错误计数、失败分类/去重、畸形回复、超时、工具链配置、真实账号密码鉴权和注册表文件白名单；TLS 回归同时验证账号密码接入。
 - 发布采用逐文件 `.moonignore` 白名单，私人申报书、凭据、本机配置及未列出的运行数据默认排除。实际归档还须核对条目、字节和许可证，不只依赖忽略规则。
-- 本轮已获 GitHub 推送和 Mooncakes 0.2.1 发布授权，实际 CI/注册表结果见 PUBLICATION，不把准备或旧绿色状态当作完成。不上传桌面运行包；MoonBit 公共 API、Apache-2.0/NOTICE 和旧快照不变。
+- 本轮已推送 GitHub 并正式发布 Mooncakes 0.2.1，新三平台源码 CI、匿名构建/校验和及独立四目标安装验证通过，证据见 PUBLICATION。不上传桌面运行包；MoonBit 公共 API、Apache-2.0/NOTICE 和旧快照不变。
 
 ## 0.2.0 — 2026-10-22
 

@@ -8,7 +8,7 @@
 
 当前源码版本为 **0.2.1**。包含有界消费工作器、MoonBit 重试决策、脱敏指标和 SQLite 业务幂等样例，保留 0.1.1 硬化修复。[工作器指南](docs/WORKER.md)、[更新记录](CHANGELOG.md)、[复测报告](docs/QUALITY_REPORT.md)；实际注册表状态见 [发布记录](docs/PUBLICATION.md)。
 
-**0.2.1 发布准备**：修正 API/响应失败漏计，增加分类指标、账号密码回归、私有工具链配置和包文件白名单。注册表仍以发布记录中的实际确认结果为准，不将准备状态或历史 CI 当作本轮发布成功。旧版 0.2.0 不覆盖。
+**0.2.1 已正式发布**：修正 API/响应失败漏计，增加分类指标、账号密码回归、私有工具链配置和包文件白名单。三平台源码 CI、注册表构建和独立四目标安装验证通过，见 [发布记录](docs/PUBLICATION.md)。旧版 0.2.0 未覆盖或撤回。
 
 MoonBit 实现协议、JetStream 请求/ACK/PubAck/元数据、精确 uint64、在途窗口与退避；Node 适配 TCP、证书 TLS、计时器和异步调度。核心四目标可复用；**当前联网为 Node/JS 参考适配**，不冒称 Native/Wasm 已联网。支持 durable pull，不是完整官方客户端。
 
@@ -75,7 +75,7 @@ const client = await Client.connect('tls://nats.example.com:4222', {
 
 ## 交付语义与维护
 
-核心安装入口：[Mooncakes](https://mooncakes.io/docs/bzhangui/moonjet)，0.2.1 命令为 `moon add bzhangui/moonjet@0.2.1`，须先确认 [发布记录](docs/PUBLICATION.md) 已完成发布。完整联网工作器与 SQLite 示例仍需本仓库 Node 适配，不会由 moon add 自动安装。
+核心安装入口：[Mooncakes](https://mooncakes.io/docs/bzhangui/moonjet)，安装命令为 `moon add bzhangui/moonjet@0.2.1`。实际发布与独立四目标验证见 [发布记录](docs/PUBLICATION.md)；完整联网工作器与 SQLite 示例仍需本仓库 Node 适配，不会由 moon add 自动安装。
 
 按至少一次处理。PubAck 表示接受发布，去重有窗口；双重 ACK 表示收到消费 ACK，不保证业务事务或独立磁盘 fsync。实际单节点突停出现已确认消息重投，示例以业务键去重处理。
 
