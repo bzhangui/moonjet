@@ -1,8 +1,15 @@
 MoonJet
 Copyright 2026 MoonJet contributors
 Licensed under Apache-2.0.
-Uses MoonBit core (moonc 0.10.15), Copyright 2026 International Digital Economy Academy,
+Uses MoonBit core (tested with moonc 0.10.18), Copyright 2026 International Digital Economy Academy,
 licensed under Apache-2.0; license retained in licenses/MoonBit-Apache-2.0.txt.
 Node.js is an external runtime, not bundled. NATS protocol documentation is a reference.
 No nats.js/nats.go implementation was copied. Apache-2.0 nats-server is an external
 checksum-verified test service, not bundled.
+Pinned nats.js 3.4.0, nkeys 2.0.3, nats.go 1.55.0 and jwt 2.8.2 are
+Apache-2.0 development-only interoperability dependencies, not runtime code.
+Their upstream license and notice files remain in their package distributions
+and Go module cache; see docs/COMPATIBILITY.md for scope and source links.
+Transitive development dependencies have their own licenses, including MIT
+(js-sha256), Unlicense (tweetnacl), and BSD-3-Clause (Go compress and golang.org/x).
+They are not relicensed or bundled with the production runtime.

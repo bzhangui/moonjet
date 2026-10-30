@@ -10,7 +10,7 @@ while ($true) {
         if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw '需要 Node.js >=22.13' }
         if (-not (Test-Path -LiteralPath (Join-Path $projectPath '_build\js\release\build\cmd\bridge\bridge.js'))) {
             & node (Join-Path $projectPath 'scripts\build.mjs')
-            if ($LASTEXITCODE -ne 0) { throw '构建失败，请检查 MoonBit >=0.10.15' }
+            if ($LASTEXITCODE -ne 0) { throw '构建失败，请检查 MoonBit >=0.10.18' }
         }
         switch ($choice) {
             '1' { & node (Join-Path $projectPath 'scripts\install-server.mjs')
