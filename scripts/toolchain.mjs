@@ -4,12 +4,12 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 export const projectRoot=fileURLToPath(new URL('../',import.meta.url));
-export const minimumCompiler='0.10.16';
+export const minimumCompiler='0.10.18';
 export function supportedCompiler(output){
   const match=output.match(/\bmoonc v(\d+)\.(\d+)\.(\d+)(?:[-+][^\s]+)?(?:\s|$)/);
   if(!match)return false;
   const [major,minor,patch]=match.slice(1).map(Number);
-  return major>0||minor>10||(minor===10&&patch>=16);
+  return major>0||minor>10||(minor===10&&patch>=18);
 }
 
 // Private configuration is explicit, never guessed from sibling projects.

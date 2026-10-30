@@ -15,8 +15,8 @@ function fixture(fn){
 }
 
 test('compiler gate compares complete version components, including future releases',()=>{
-  for(const value of ['0.10.16','0.10.18','0.10.100','0.11.0','0.100.0','1.0.0','2.3.4'])assert.equal(supportedCompiler('moon v0.1\nmoonc v'+value+' (build)'),true,value);
-  for(const value of ['0.10.15','0.10.14','0.9.100','0.1.999'])assert.equal(supportedCompiler('moonc v'+value+' (build)'),false,value);
+  for(const value of ['0.10.18','0.10.100','0.11.0','0.100.0','1.0.0','2.3.4'])assert.equal(supportedCompiler('moon v0.1\nmoonc v'+value+' (build)'),true,value);
+  for(const value of ['0.10.17','0.10.16','0.10.15','0.10.14','0.9.100','0.1.999'])assert.equal(supportedCompiler('moonc v'+value+' (build)'),false,value);
   assert.equal(supportedCompiler('moon v0.10.15\nno compiler version'),false);
   assert.equal(supportedCompiler('moonc v0.10.15oops'),false);
 });
