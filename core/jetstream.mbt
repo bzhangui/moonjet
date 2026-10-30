@@ -87,7 +87,7 @@ pub fn parse_json(source : String) -> Json raise {
       depth -= 1
     }
   }
-  @json.parse(source)
+  @json.parse(source, preserve_number_repr=true, reject_duplicate_keys=true)
 }
 
 ///|
@@ -290,7 +290,7 @@ pub fn api_response(source : String) -> Json raise {
 pub fn publish_ack(source : String) -> PublishAck raise {
   let value = api_response(source)
   let stream = text(json_field(value, "stream"))
-  token(stream)
+  validate_resource_name(stream)
   let sequence = sequence_value(json_field(value, "seq"))
   guard sequence != "0" else {
     raise Invalid("publish sequence must be positive")
@@ -315,8 +315,8 @@ pub fn ack_metadata(subject : String) -> AckMetadata raise ProtocolError {
     raise Invalid("not a JetStream ACK subject")
   }
   let start = if parts.length() == 9 { 2 } else { 4 }
-  token(parts[start])
-  token(parts[start + 1])
+  validate_resource_name(parts[start])
+  validate_resource_name(parts[start + 1])
   for i = start + 2; i < start + 7; i = i + 1 {
     valid_sequence(parts[i])
   }

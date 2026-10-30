@@ -9,29 +9,51 @@ import {
 // Values
 pub fn ack_metadata(String) -> AckMetadata raise ProtocolError
 
-pub fn acknowledgement(String, delay_ms? : Int) -> Bytes raise ProtocolError
+pub fn acknowledgement(String, delay_ms? : Int32) -> Bytes raise ProtocolError
 
 pub fn api_request(String, String, consumer? : String, filter? : String, options? : Json, prefix? : String) -> ApiRequest raise ProtocolError
 
 pub fn api_response(String) -> Json raise
 
+pub fn configuration_fields(String) -> Array[Header] raise ProtocolError
+
+pub fn decode_user_seed(String) -> Bytes raise ProtocolError
+
+pub fn encode_user_public(Bytes) -> String raise ProtocolError
+
 pub fn json_field(Json, String) -> Json
+
+pub fn kv_config(String, Int32, Int32) -> Json raise
+
+pub fn kv_subject(String, String, watch? : Bool) -> String raise ProtocolError
+
+pub fn management_request(String, stream? : String, consumer? : String, options? : Json, prefix? : String) -> ApiRequest raise
 
 pub fn parse_json(String) -> Json raise
 
-pub fn publish(String, Bytes, reply? : String, headers? : Array[Header], max_payload? : Int) -> Bytes raise ProtocolError
+pub fn pool_index(Int32, Int32) -> Int32 raise ProtocolError
+
+pub fn publish(String, Bytes, reply? : String, headers? : Array[Header], max_payload? : Int32) -> Bytes raise ProtocolError
 
 pub fn publish_ack(String) -> PublishAck raise
 
-pub fn pull_status(Int, String, received? : Int) -> String
+pub fn pull_status(Int32, String, received? : Int32) -> String
 
-pub fn reconnect_delay(Int) -> Int raise ProtocolError
+pub fn reconnect_delay(Int32) -> Int32 raise ProtocolError
 
 pub fn sequence_value(Json) -> String raise ProtocolError
+
+pub fn stored_headers(String) -> Array[Header] raise
 
 pub fn subscribe(String, String, queue? : String) -> Bytes raise ProtocolError
 
 pub fn unsubscribe(String) -> Bytes raise ProtocolError
+
+pub fn validate_configuration(String, Json) -> Json raise
+
+pub fn validate_object_info(Json, String, String) -> Json raise
+
+pub fn validate_resource_name(String) -> Unit raise ProtocolError
 
 pub fn validate_subject(String, wildcards? : Bool) -> Unit raise ProtocolError
 
@@ -62,28 +84,34 @@ pub fn ApiRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecod
 pub fn ApiRequest::to_json(Self) -> Json
 pub fn ApiRequest::to_repr(Self) -> @debug.Repr
 
+pub struct ConsumerConfig {
+  values : Json
+}
+pub fn ConsumerConfig::from_json(Json) -> Self raise
+pub fn ConsumerConfig::json(Self) -> Json
+
 pub struct Decoder {
   mut buffer : Array[Byte]
-  max_payload : Int
+  max_payload : Int32
   mut failed : Bool
 }
 pub fn Decoder::feed(Self, Bytes) -> Array[Frame] raise
 pub fn Decoder::finish(Self) -> Unit raise ProtocolError
-pub fn Decoder::new(max_payload? : Int) -> Self raise ProtocolError
+pub fn Decoder::new(max_payload? : Int32) -> Self raise ProtocolError
 
 pub(all) struct DeliveryDecision {
   action : String
-  delay_ms : Int
+  delay_ms : Int32
 } derive(ToJson, @debug.Debug)
 pub fn DeliveryDecision::to_json(Self) -> Json
 pub fn DeliveryDecision::to_repr(Self) -> @debug.Repr
 
 pub struct DeliveryPolicy {
-  max_deliveries : Int
-  initial_delay_ms : Int
-  max_delay_ms : Int
+  max_deliveries : Int32
+  initial_delay_ms : Int32
+  max_delay_ms : Int32
 } derive(ToJson, @debug.Debug)
-pub fn DeliveryPolicy::new(max_deliveries? : Int, initial_delay_ms? : Int, max_delay_ms? : Int) -> Self raise ProtocolError
+pub fn DeliveryPolicy::new(max_deliveries? : Int32, initial_delay_ms? : Int32, max_delay_ms? : Int32) -> Self raise ProtocolError
 pub fn DeliveryPolicy::on_failure(Self, String) -> DeliveryDecision raise ProtocolError
 pub fn DeliveryPolicy::to_json(Self) -> Json
 pub fn DeliveryPolicy::to_repr(Self) -> @debug.Repr
@@ -94,7 +122,7 @@ pub(all) struct Frame {
   sid : String
   reply : String
   headers : Array[Header]
-  status : Int
+  status : Int32
   description : String
   payload : Bytes
 } derive(@debug.Debug)
@@ -116,12 +144,19 @@ pub(all) struct PublishAck {
 pub fn PublishAck::to_json(Self) -> Json
 pub fn PublishAck::to_repr(Self) -> @debug.Repr
 
+pub struct StreamConfig {
+  values : Json
+}
+pub fn StreamConfig::from_json(Json) -> Self raise
+pub fn StreamConfig::json(Self) -> Json
+pub fn StreamConfig::new(String, Array[String]) -> Self raise
+
 pub struct Window {
-  limit : Int
+  limit : Int32
   pending : Map[String, Bool]
 }
-pub fn Window::count(Self) -> Int
-pub fn Window::new(limit? : Int) -> Self raise ProtocolError
+pub fn Window::count(Self) -> Int32
+pub fn Window::new(limit? : Int32) -> Self raise ProtocolError
 pub fn Window::release(Self, String) -> Unit
 pub fn Window::reserve(Self, String) -> Unit raise ProtocolError
 

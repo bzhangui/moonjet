@@ -56,6 +56,10 @@ fn normalized_response(
     value is Number(_, ..) {
     return Json(@protocol.sequence_value(value))
   }
+  if value is Number(n, ..) &&
+    (n > 9007199254740991.0 || n < -9007199254740991.0) {
+    return Json(value.stringify())
+  }
   match value {
     Object(map) => {
       let output : Map[String, Json] = Map([])
@@ -139,7 +143,12 @@ pub fn encode(arguments : String, payload : Bytes) -> Bytes raise {
         max_payload=maximum,
       )
     }
-    "sub" => @protocol.subscribe(subject, id)
+    "sub" =>
+      @protocol.subscribe(
+        subject,
+        id,
+        queue=value_text(@protocol.json_field(args, "queue")),
+      )
     "unsub" => @protocol.unsubscribe(id)
     "ping" => b"PING\r\n"
     "pong" => b"PONG\r\n"
@@ -163,6 +172,89 @@ fn command_impl(arguments : String) -> Json raise {
   let args = @protocol.parse_json(arguments)
   let current_action = value_text(@protocol.json_field(args, "action"))
   match current_action {
+    "nkey_seed" =>
+      Json(
+        hex(
+          @protocol.decode_user_seed(
+            value_text(@protocol.json_field(args, "seed")),
+          ),
+        ),
+      )
+    "nkey_public" => {
+      let bytes : Array[Int32] = @json.from_json(
+        @protocol.json_field(args, "bytes"),
+      )
+      guard bytes.length() == 32 && bytes.all(fn(n) { n >= 0 && n <= 255 }) else {
+        raise @protocol.Invalid("invalid public key")
+      }
+      Json(
+        @protocol.encode_user_public(
+          Bytes::from_array(bytes.map(fn(n) { n.to_byte() })),
+        ),
+      )
+    }
+    "stored_headers" =>
+      Json(
+        @protocol.stored_headers(
+          value_text(@protocol.json_field(args, "source")),
+        ),
+      )
+    "kv_config" => {
+      let history = @protocol.json_field(args, "history")
+      let ttl = @protocol.json_field(args, "ttl_ms")
+      guard history is Number(h, ..) &&
+        ttl is Number(t, ..) &&
+        h >= 1.0 &&
+        h <= 64.0 &&
+        t >= 0.0 &&
+        t <= 2147483647.0 &&
+        h == h.to_int().to_double() &&
+        t == t.to_int().to_double() else {
+        raise @protocol.Invalid("KV configuration budget")
+      }
+      @protocol.kv_config(
+        value_text(@protocol.json_field(args, "bucket")),
+        h.to_int(),
+        t.to_int(),
+      )
+    }
+    "object_info" =>
+      @protocol.validate_object_info(
+        @protocol.json_field(args, "info"),
+        value_text(@protocol.json_field(args, "bucket")),
+        value_text(@protocol.json_field(args, "name")),
+      )
+    "management" =>
+      Json(
+        @protocol.management_request(
+          value_text(@protocol.json_field(args, "operation")),
+          stream=value_text(@protocol.json_field(args, "stream")),
+          consumer=value_text(@protocol.json_field(args, "consumer")),
+          options=@protocol.json_field(args, "options"),
+          prefix=value_text(
+            @protocol.json_field(args, "prefix"),
+            fallback="$JS.API",
+          ),
+        ),
+      )
+    "configuration" =>
+      @protocol.validate_configuration(
+        value_text(@protocol.json_field(args, "kind")),
+        @protocol.json_field(args, "value"),
+      )
+    "kv_subject" =>
+      Json(
+        @protocol.kv_subject(
+          value_text(@protocol.json_field(args, "bucket")),
+          value_text(@protocol.json_field(args, "key")),
+          watch=@protocol.json_field(args, "watch") == Json(true),
+        ),
+      )
+    "pool_index" => {
+      let a : Int32 = @json.from_json(@protocol.json_field(args, "attempt"))
+      let n : Int32 = @json.from_json(@protocol.json_field(args, "size"))
+      Json(@protocol.pool_index(a, n))
+    }
     "pull_status" => {
       guard @protocol.json_field(args, "status") is Number(n, ..) &&
         n >= 0.0 &&

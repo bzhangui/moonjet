@@ -9,3 +9,8 @@ coverage/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.creds
+*.pem
+*.key
+*.p12
+*.pfx

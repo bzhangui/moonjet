@@ -8,5 +8,6 @@ if(process.argv[1]===fileURLToPath(import.meta.url)){
   const [major,minor]=process.versions.node.split('.').map(Number);
   if(major<22||(major===22&&minor<13))throw new Error('Node.js >= 22.13 required (SQLite example uses node:sqlite)');
   probeToolchain(selection);
-  run(moon,['update']);run(moon,['build','--target','js','--release','--deny-warn']);
+  const frozen=process.argv.includes('--frozen');
+  if(!frozen)run(moon,['update']);run(moon,['build','--target','js','--release','--deny-warn',...(frozen?['--frozen']:[])]);
 }

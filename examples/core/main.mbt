@@ -26,6 +26,33 @@ fn main {
       abort("pull status mismatch")
     }
     println("portable core: verified=true")
+    let stream = @jet.StreamConfig::new("CONFIGURED", ["configured.>"])
+    let plan = @jet.management_request(
+      "stream.create",
+      stream="CONFIGURED",
+      options=stream.json(),
+    )
+    guard plan.subject == "$JS.API.STREAM.CREATE.CONFIGURED" else {
+      abort("typed management mismatch")
+    }
+    let kv = @jet.kv_config("CACHE", 3, 0)
+    guard @jet.json_field(kv, "name") == Json("KV_CACHE") else {
+      abort("portable KV mismatch")
+    }
+    ignore(
+      @jet.validate_object_info(
+        {
+          "bucket": "FILES",
+          "name": "empty",
+          "size": 0,
+          "chunks": 0,
+          "digest": "SHA-256=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        },
+        "FILES",
+        "empty",
+      ),
+    )
+    println("portable management and storage guards: verified=true")
   } catch {
     _ => abort("portable core example failed")
   }

@@ -1,5 +1,25 @@
 {
-  "name":"moonjet-sdk", "version":"0.2.1", "private":true, "type":"module",
-  "engines":{"node":">=22.13"},
-  "scripts":{"build":"node scripts/build.mjs","toolchain":"node scripts/toolchain.mjs","test":"node --test tests/*.test.mjs","validate":"node scripts/validate.mjs","demo":"node examples/demo.mjs","demo:worker":"node examples/idempotent-worker.mjs"}
+  "name": "moonjet-sdk",
+  "version": "0.3.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "devDependencies": {
+    "@nats-io/transport-node": "3.4.0",
+    "@nats-io/jetstream": "3.4.0",
+    "@nats-io/kv": "3.4.0",
+    "@nats-io/obj": "3.4.0",
+    "@nats-io/nkeys": "2.0.3"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "toolchain": "node scripts/toolchain.mjs",
+    "test": "node --test --test-concurrency=4 tests/*.test.mjs",
+    "validate": "node scripts/validate.mjs",
+    "demo": "node examples/demo.mjs",
+    "demo:worker": "node examples/idempotent-worker.mjs"
+  }
 }
