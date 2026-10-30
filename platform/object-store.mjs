@@ -41,6 +41,10 @@ export function installObjectStore(Client, command) {
       });
       if (m.subject !== identity(this.bucket, info.name))
         throw new Error("Object metadata subject mismatch");
+      if (!info.deleted && !info.options?.link && typeof info.nuid !== "string")
+        throw new Error(
+          "Missing object chunk identifier; refuse retrieval or garbage collection",
+        );
       if (info.nuid !== undefined && !/^[A-Za-z0-9_-]{1,64}$/.test(info.nuid))
         throw new Error("Invalid object chunk identifier");
       return {

@@ -13,7 +13,7 @@ async function available(operation) {
     } catch (e) {
       if (
         performance.now() > deadline ||
-        !/NATS response status 503|Request timeout|err_code=(10008|10009|10004)\b/.test(
+        !/NATS response status 503|Request timeout|err_code=(10008|10009|10004|10158)\b/.test(
           e.message,
         )
       )

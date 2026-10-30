@@ -87,6 +87,16 @@ test("watch restart fencing cancellation early iterator return and malformed man
       },
     );
     await assert.rejects(obj.getBytes("x"), /digest/);
+    const malformed = { ...info };
+    delete malformed.nuid;
+    await c.publish(msubject, Buffer.from(JSON.stringify(malformed)), {
+      messageId: "missing-chunk-id",
+      headers: [{ name: "Nats-Rollup", value: "sub" }],
+    });
+    await assert.rejects(
+      obj.garbageCollect({ dryRun: false, confirmQuiescent: true }),
+      /chunk identifier/,
+    );
   } finally {
     c.close();
     await s.cleanup();
